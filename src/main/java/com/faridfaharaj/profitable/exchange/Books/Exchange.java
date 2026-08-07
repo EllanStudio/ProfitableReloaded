@@ -191,6 +191,16 @@ public class Exchange {
                 Candles.updateDay(player.getWorld(), tradedAsset.getCode(), orders.getLast().getPrice(), unitsTransacted);
                 Orders.updateStopLimit(player.getWorld(), lastday.getClose(), orders.getLast().getPrice());
                 Orders.deleteOrders(player.getWorld(), ordersToDelete);
+
+                // Notify other servers about this trade so they can keep price charts in sync
+                if (Profitable.getRedisManager() != null && Profitable.getRedisManager().isConnected()) {
+                    String tradeMsg = player.getWorld().getName() + ":"
+                            + tradedAsset.getCode() + ":"
+                            + orders.getLast().getPrice() + ":"
+                            + unitsTransacted + ":"
+                            + player.getWorld().getFullTime();
+                    Profitable.getRedisManager().publish("trade_executed", tradeMsg);
+                }
             });
         });
 

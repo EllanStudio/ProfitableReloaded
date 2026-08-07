@@ -22,6 +22,7 @@ import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.*;
 import org.bukkit.event.world.WorldInitEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
@@ -158,6 +159,9 @@ public class Events implements Listener {
 
     @EventHandler
     public void onPlayerInteract(PlayerInteractEvent event){
+        // Ignore off-hand events to prevent duplicate message delivery
+        if (event.getHand() != EquipmentSlot.HAND) return;
+
         Player player = event.getPlayer();
         TemporalItems.TemporalItem tempItem = TemporalItems.holdingTemp.get(player.getUniqueId());
         if (tempItem != null) {

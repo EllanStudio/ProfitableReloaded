@@ -45,6 +45,12 @@ public class DataBase {
 
     public static void connectSQLite() throws SQLException {
 
+        if (Profitable.getInstance().getConfig().getBoolean("redis.enabled", false)) {
+            Profitable.getInstance().getLogger().warning(
+                    "SQLite is not suitable for multi-server (Velocity) setups. " +
+                    "Switch to MySQL (database-type: 1) when using Redis synchronization.");
+        }
+
         // TEMPORAL ######
         try{
             Files.move(Paths.get(Profitable.getInstance().getDataFolder().getAbsolutePath()+"/data/server_Wide.db"), Paths.get(Profitable.getInstance().getDataFolder().getAbsolutePath() + "/Data.db"), StandardCopyOption.REPLACE_EXISTING);

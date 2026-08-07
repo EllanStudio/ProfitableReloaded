@@ -58,6 +58,22 @@
                             <pattern>net.kyori.adventure.text.serializer.gson</pattern>
                             <shadedPattern>com.faridfaharaj.profitable.shaded.gsonserializer</shadedPattern>
                         </relocation>
+                        <relocation>
+                            <pattern>io.lettuce</pattern>
+                            <shadedPattern>com.faridfaharaj.profitable.shaded.lettuce</shadedPattern>
+                        </relocation>
+                        <relocation>
+                            <pattern>io.netty</pattern>
+                            <shadedPattern>com.faridfaharaj.profitable.shaded.netty</shadedPattern>
+                        </relocation>
+                        <relocation>
+                            <pattern>reactor</pattern>
+                            <shadedPattern>com.faridfaharaj.profitable.shaded.reactor</shadedPattern>
+                        </relocation>
+                        <relocation>
+                            <pattern>org.reactivestreams</pattern>
+                            <shadedPattern>com.faridfaharaj.profitable.shaded.reactivestreams</shadedPattern>
+                        </relocation>
                     </relocations>
                 </configuration>
             </plugin>
@@ -103,7 +119,7 @@
         <dependency>
             <groupId>io.papermc.paper</groupId>
             <artifactId>paper-api</artifactId>
-            <version>1.21-R0.1-SNAPSHOT</version>
+            <version>1.21.4-R0.1-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
@@ -141,6 +157,12 @@
             <artifactId>playerpoints</artifactId>
             <version>3.3.0</version>
             <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.lettuce</groupId>
+            <artifactId>lettuce-core</artifactId>
+            <version>6.4.0.RELEASE</version>
+            <scope>compile</scope>
         </dependency>
     </dependencies>
 </project>

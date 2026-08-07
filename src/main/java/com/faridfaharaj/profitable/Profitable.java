@@ -3,10 +3,12 @@ package com.faridfaharaj.profitable;
 import com.faridfaharaj.profitable.commands.*;
 import com.faridfaharaj.profitable.data.tables.Accounts;
 import com.faridfaharaj.profitable.data.tables.Assets;
+import com.faridfaharaj.profitable.data.tables.Candles;
+import com.faridfaharaj.profitable.redis.RedisManager;
+import com.faridfaharaj.profitable.tasks.TemporalItems;
 import com.tcoded.folialib.FoliaLib;
 
 import com.faridfaharaj.profitable.data.DataBase;
-import com.faridfaharaj.profitable.tasks.TemporalItems;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -46,6 +48,7 @@ public final class Profitable extends JavaPlugin {
     private static Profitable instance;
     private static FoliaLib foliaLib;
     private static Lang lang;
+    private static RedisManager redisManager;
 
     public static Profitable getInstance() {
         return instance;
@@ -57,6 +60,10 @@ public final class Profitable extends JavaPlugin {
 
     public static FoliaLib getfolialib() {
         return foliaLib;
+    }
+
+    public static RedisManager getRedisManager() {
+        return redisManager;
     }
 
     @Override
@@ -79,6 +86,57 @@ public final class Profitable extends JavaPlugin {
 
         //config-----------------
         Configuration.loadConfig(this);
+
+        //REDIS (optional, for Velocity/multi-server synchronization)---------
+        if (getConfig().getBoolean("redis.enabled", false)) {
+            String redisHost = getConfig().getString("redis.host", "localhost");
+            int redisPort = getConfig().getInt("redis.port", 6379);
+            String redisPassword = getConfig().getString("redis.password", "");
+            String redisPrefix = getConfig().getString("redis.channel-prefix", "profitable");
+            redisManager = new RedisManager(redisHost, redisPort, redisPassword, redisPrefix);
+
+            if (redisManager.isConnected()) {
+                // Invalidate local account session when another server logs this player in
+                redisManager.subscribe("player_login", message -> {
+                    // message format: "playerId:accountName"
+                    String[] parts = message.split(":", 2);
+                    if (parts.length == 2) {
+                        try {
+                            UUID playerId = UUID.fromString(parts[0]);
+                            Accounts.logOutLocal(playerId);
+                            TemporalItems.holdingTemp.remove(playerId);
+                        } catch (IllegalArgumentException ignored) {}
+                    }
+                });
+
+                // Invalidate local account session when another server logs this player out
+                redisManager.subscribe("player_logout", message -> {
+                    try {
+                        UUID playerId = UUID.fromString(message.trim());
+                        Accounts.logOutLocal(playerId);
+                        TemporalItems.holdingTemp.remove(playerId);
+                    } catch (IllegalArgumentException ignored) {}
+                });
+
+                // Update local candle data when another server executes a trade
+                // message format: "worldName:assetCode:price:units:fullTime"
+                redisManager.subscribe("trade_executed", message -> {
+                    String[] parts = message.split(":", 5);
+                    if (parts.length == 5) {
+                        try {
+                            String worldName = parts[0];
+                            String assetCode = parts[1];
+                            double price = Double.parseDouble(parts[2]);
+                            double units = Double.parseDouble(parts[3]);
+                            World world = getServer().getWorld(worldName);
+                            if (world != null) {
+                                Candles.updateDay(world, assetCode, price, units);
+                            }
+                        } catch (NumberFormatException ignored) {}
+                    }
+                });
+            }
+        }
 
         //DATABASE---------
         try {
@@ -170,6 +228,10 @@ public final class Profitable extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (redisManager != null) {
+            redisManager.shutdown();
+        }
+
         try {
             DataBase.closeConnection();
         } catch (SQLException e) {

@@ -29,6 +29,21 @@ database:
     password:
     options: "?useSSL=true&requireSSL=true&serverTimezone=UTC&allowPublicKeyRetrieval=true"
 
+# Redis configuration for Velocity proxy / multi-server support
+# When enabled, in-memory state (account sessions, trade events) is synchronized
+# across all backend servers via Redis pub/sub.
+# NOTE: SQLite is a single-file database not suitable for multi-server use.
+#       Switch database-type to 1 (MySQL) when running behind a Velocity proxy.
+redis:
+  # Set to true to enable Redis synchronization
+  enabled: false
+  host: localhost
+  port: 6379
+  # Leave blank if your Redis instance has no password
+  password:
+  # Prefix prepended to all channel names used by this plugin
+  channel-prefix: "profitable"
+
 exchange:
   fees: # Fixed: 23    Percentage: 23%
     # Fees when you take money from your wallet

@@ -7,7 +7,6 @@ import com.faridfaharaj.profitable.util.MessagingUtil;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
-
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
 import java.io.*;
@@ -317,12 +316,23 @@ public class Accounts {
 
     public static void logOut(UUID playerid){
         currentAccounts.remove(playerid);
+        if (Profitable.getRedisManager() != null && Profitable.getRedisManager().isConnected()) {
+            Profitable.getRedisManager().publish("player_logout", playerid.toString());
+        }
+    }
+
+    /** Removes the local session without publishing a Redis event (used by the Redis subscriber itself). */
+    public static void logOutLocal(UUID playerid){
+        currentAccounts.remove(playerid);
     }
 
     public static boolean logIn(Player player, String name, String password){
 
         if(comparePasswords(player.getWorld(), name, password)){
             currentAccounts.put(player.getUniqueId(), name);
+            if (Profitable.getRedisManager() != null && Profitable.getRedisManager().isConnected()) {
+                Profitable.getRedisManager().publish("player_login", player.getUniqueId() + ":" + name);
+            }
             return true;
         }
 
