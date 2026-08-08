@@ -2,6 +2,8 @@ package com.faridfaharaj.profitable.data;
 
 import com.faridfaharaj.profitable.Profitable;
 import com.faridfaharaj.profitable.util.MessagingUtil;
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -16,12 +18,14 @@ import java.security.CodeSource;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 public class DataBase {
 
     private static Connection connection;
+    private static HikariDataSource hikariDataSource;
 
     public static void connectMySQL() throws SQLException{
 
@@ -35,12 +39,23 @@ public class DataBase {
 
         String link = "jdbc:mysql://" + host + ":" + port + "/" + database + options;
 
-        connection = DriverManager.getConnection(
-                link,
-                username,
-                password
-        );
+        HikariConfig config = new HikariConfig();
+        config.setJdbcUrl(link);
+        config.setUsername(username);
+        config.setPassword(password);
+        config.setMaximumPoolSize(10);
+        config.setMinimumIdle(2);
+        config.setIdleTimeout(300000); // 5 minutes
+        config.setMaxLifetime(600000); // 10 minutes
+        config.setConnectionTimeout(10000); // 10 seconds
+        config.addDataSourceProperty("cachePrepStmts", "true");
+        config.addDataSourceProperty("prepStmtCacheSize", "250");
+        config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
 
+        hikariDataSource = new HikariDataSource(config);
+        connection = hikariDataSource.getConnection();
+
+        Profitable.getInstance().getLogger().info("HikariCP connection pool initialized (max=10, minIdle=2)");
     }
 
     public static void connectSQLite() throws SQLException {
@@ -65,18 +80,32 @@ public class DataBase {
             stmt.execute("PRAGMA journal_mode = WAL;");
             stmt.execute("PRAGMA threadsafety=1;");
         }catch (Exception e){
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "Database error", e);
         }
 
 
     }
 
     public static void closeConnection() throws SQLException {
-        connection.close();
+        if (connection != null && !connection.isClosed()) {
+            connection.close();
+        }
+        if (hikariDataSource != null && !hikariDataSource.isClosed()) {
+            hikariDataSource.close();
+        }
     }
 
     // Get the current database connection
     public static Connection getConnection() {
+        try {
+            if (connection == null || connection.isClosed()) {
+                if (hikariDataSource != null) {
+                    connection = hikariDataSource.getConnection();
+                }
+            }
+        } catch (SQLException e) {
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "Database error", e);
+        }
         return connection;
     }
 
@@ -94,14 +123,14 @@ public class DataBase {
         try (Statement stmt = connection.createStatement()) {
             stmt.execute("CREATE TABLE IF NOT EXISTS profitable_database_version(version INT NOT NULL PRIMARY KEY);");
         }catch (SQLException e){
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "Database error", e);
         }
 
         try (Statement stmt = connection.createStatement();
              ResultSet rs = stmt.executeQuery("SELECT version FROM profitable_database_version")) {
             currentVersion = rs.next() ? rs.getInt("version") : 0;
         }catch (SQLException e){
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "Database error", e);
         }
 
         List<String> migrationFiles = getMigrationFiles().stream()
@@ -129,7 +158,7 @@ public class DataBase {
 
                 stmt.execute("INSERT INTO profitable_database_version (version) VALUES (1)");
             }catch (SQLException e){
-                e.printStackTrace();
+                Profitable.getInstance().getLogger().log(Level.SEVERE, "Database error", e);
             }
 
             Profitable.getInstance().getLogger().info("Partially Migrated Pre-0.2.0 database");
@@ -176,7 +205,7 @@ public class DataBase {
                 }
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "Database error", e);
         }
         return files;
     }

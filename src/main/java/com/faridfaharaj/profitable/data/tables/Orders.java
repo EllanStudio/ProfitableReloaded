@@ -5,12 +5,14 @@ import com.faridfaharaj.profitable.Profitable;
 import com.faridfaharaj.profitable.data.DataBase;
 import com.faridfaharaj.profitable.data.holderClasses.Asset;
 import com.faridfaharaj.profitable.data.holderClasses.Order;
+import com.faridfaharaj.profitable.redis.RedisManager;
 import com.faridfaharaj.profitable.util.MessagingUtil;
 import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 
 import java.io.IOException;
+import java.util.logging.Level;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -37,7 +39,7 @@ public class Orders {
             return true;
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -55,23 +57,25 @@ public class Orders {
             stmt.executeUpdate();
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
     public static void updateStopLimit(World world,double old, double actual) {
-        String sql = "UPDATE orders SET order_type = " + Order.OrderType.LIMIT.getValue() + " WHERE world = ? AND order_type = " + Order.OrderType.STOP_LIMIT.getValue() + " AND price <= ? AND price >= ?;";
+        String sql = "UPDATE orders SET order_type = ? WHERE world = ? AND order_type = ? AND price <= ? AND price >= ?;";
 
         try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
-            stmt.setBytes(1, MessagingUtil.getWorldId(world));
-            stmt.setDouble(2, Math.max(old,actual));
-            stmt.setDouble(3, Math.min(old,actual));
+            stmt.setInt(1, Order.OrderType.LIMIT.getValue());
+            stmt.setBytes(2, MessagingUtil.getWorldId(world));
+            stmt.setInt(3, Order.OrderType.STOP_LIMIT.getValue());
+            stmt.setDouble(4, Math.max(old,actual));
+            stmt.setDouble(5, Math.min(old,actual));
             stmt.executeUpdate();
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
     }
 
@@ -103,7 +107,7 @@ public class Orders {
             }
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
     }*/
 
@@ -144,7 +148,7 @@ public class Orders {
             }
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
         return orders;
     }
@@ -179,7 +183,7 @@ public class Orders {
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
 
         return orders;
@@ -214,7 +218,7 @@ public class Orders {
             }
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
         return orders;
     }
@@ -248,7 +252,7 @@ public class Orders {
             }
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
         return orders;
     }
@@ -277,7 +281,7 @@ public class Orders {
             }
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -287,6 +291,36 @@ public class Orders {
     }
 
 
+
+    public static List<Order> getAllOrders(World world) {
+        List<Order> orders = new ArrayList<>();
+        String sql = "SELECT * FROM orders WHERE world = ?;";
+
+        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
+            stmt.setBytes(1, MessagingUtil.getWorldId(world));
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    Order order = new Order(
+                            MessagingUtil.UUIDfromBytes(rs.getBytes("order_uuid")),
+                            rs.getString("owner"),
+                            rs.getString("asset_id"),
+                            rs.getBoolean("sideBuy"),
+                            rs.getDouble("price"),
+                            rs.getDouble("units"),
+                            Order.OrderType.fromValue(rs.getInt("order_type"))
+                    );
+                    orders.add(order);
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+
+        } catch (SQLException e) {
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
+        }
+        return orders;
+    }
 
     public static List<Order> getAllOrders() {
         List<Order> orders = new ArrayList<>();
@@ -309,7 +343,7 @@ public class Orders {
             }
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -323,6 +357,9 @@ public class Orders {
 
         String sql = "DELETE FROM orders WHERE world = ? AND order_uuid = ?;";
 
+        // Batched deletes without manual transaction handling: the shared connection
+        // is used concurrently by async tasks, so toggling autoCommit here could
+        // drag other threads' statements into this transaction.
         try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
             for (Order order : orders) {
                 stmt.setBytes(1, MessagingUtil.getWorldId(world));
@@ -333,7 +370,7 @@ public class Orders {
             stmt.executeBatch();
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -349,7 +386,7 @@ public class Orders {
             return rows > 0;
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -364,7 +401,7 @@ public class Orders {
             int rows = stmt.executeUpdate(sql);
             return rows > 0;
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
         return false;
     }
@@ -392,6 +429,12 @@ public class Orders {
         player.playSound(player, Sound.ENTITY_ITEM_BREAK, 1 , 1);
 
         Orders.deleteOrder(player.getWorld(), order.getUuid());
+
+        // Notify other servers about order cancellation
+        RedisManager rm = Profitable.getRedisManager();
+        if (rm != null && rm.isConnected()) {
+            rm.publishAsync("order_cancelled", player.getWorld().getName() + ":" + order.getUuid());
+        }
 
         MessagingUtil.sendComponentMessage(player, Profitable.getLang().get("orders.cancel",
                         Map.entry("%order%", order.toStringSimplified()))

@@ -1,14 +1,18 @@
 package com.faridfaharaj.profitable;
 
 import com.faridfaharaj.profitable.commands.*;
+import com.faridfaharaj.profitable.data.holderClasses.Asset;
 import com.faridfaharaj.profitable.data.tables.Accounts;
 import com.faridfaharaj.profitable.data.tables.Assets;
+import com.faridfaharaj.profitable.data.tables.AssetDataCache;
 import com.faridfaharaj.profitable.data.tables.Candles;
+import com.faridfaharaj.profitable.data.tables.Orders;
 import com.faridfaharaj.profitable.redis.RedisManager;
 import com.faridfaharaj.profitable.tasks.TemporalItems;
 import com.tcoded.folialib.FoliaLib;
 
 import com.faridfaharaj.profitable.data.DataBase;
+import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -93,9 +97,14 @@ public final class Profitable extends JavaPlugin {
             int redisPort = getConfig().getInt("redis.port", 6379);
             String redisPassword = getConfig().getString("redis.password", "");
             String redisPrefix = getConfig().getString("redis.channel-prefix", "profitable");
-            redisManager = new RedisManager(redisHost, redisPort, redisPassword, redisPrefix);
+            int reconnectAttempts = getConfig().getInt("redis.reconnect-attempts", 5);
+            long reconnectDelayMs = getConfig().getLong("redis.reconnect-delay-ms", 2000);
+            boolean syncOrders = getConfig().getBoolean("redis.sync-orders", true);
+            redisManager = new RedisManager(redisHost, redisPort, redisPassword, redisPrefix, reconnectAttempts, reconnectDelayMs);
 
-            if (redisManager.isConnected()) {
+            // Subscriptions are registered unconditionally: if the initial connection
+            // fails, RedisManager restores them automatically once reconnected.
+            {
                 // Invalidate local account session when another server logs this player in
                 redisManager.subscribe("player_login", message -> {
                     // message format: "playerId:accountName"
@@ -133,6 +142,103 @@ public final class Profitable extends JavaPlugin {
                                 Candles.updateDay(world, assetCode, price, units);
                             }
                         } catch (NumberFormatException ignored) {}
+                    }
+                });
+
+                // Sync order book when another server cancels an order
+                if (syncOrders) {
+                    redisManager.subscribe("order_cancelled", message -> {
+                        // message format: "worldName:orderUUID"
+                        String[] parts = message.split(":", 2);
+                        if (parts.length == 2) {
+                            try {
+                                String worldName = parts[0];
+                                UUID orderUUID = UUID.fromString(parts[1]);
+                                World world = getServer().getWorld(worldName);
+                                if (world != null) {
+                                    // Remove the order from local order book
+                                    Orders.cancelOrder(world, orderUUID);
+                                }
+                            } catch (IllegalArgumentException ignored) {}
+                        }
+                    });
+                }
+
+                // Sync balance changes across servers (optional, higher overhead)
+                if (getConfig().getBoolean("redis.sync-balances", false)) {
+                    redisManager.subscribe("balance_changed", message -> {
+                        // message format: "worldName:accountName:assetCode:newBalance"
+                        String[] parts = message.split(":", 4);
+                        if (parts.length == 4) {
+                            try {
+                                String worldName = parts[0];
+                                String accountName = parts[1];
+                                String assetCode = parts[2];
+                                double newBalance = Double.parseDouble(parts[3]);
+                                World world = getServer().getWorld(worldName);
+                                if (world != null) {
+                                    com.faridfaharaj.profitable.data.tables.AccountHoldings.setHolding(world, accountName, assetCode, newBalance);
+                                }
+                            } catch (NumberFormatException ignored) {}
+                        }
+                    });
+                }
+
+                // Sync new asset registrations across servers
+                redisManager.subscribe("asset_registered", message -> {
+                    // message format: "worldName:assetCode:assetType"
+                    String[] parts = message.split(":", 3);
+                    if (parts.length == 3) {
+                        try {
+                            String worldName = parts[0];
+                            String assetCode = parts[1];
+                            int assetType = Integer.parseInt(parts[2]);
+                            World world = getServer().getWorld(worldName);
+                            if (world != null) {
+                                // Register the asset locally if it doesn't exist
+                                Assets.addAsset(world, assetCode, assetType, new byte[0]);
+                                AssetDataCache.invalidate(world, assetCode);
+                            }
+                        } catch (NumberFormatException ignored) {}
+                    }
+                });
+
+                // Sync asset deletions across servers
+                redisManager.subscribe("asset_deleted", message -> {
+                    // message format: "worldName:assetCode"
+                    String[] parts = message.split(":", 2);
+                    if (parts.length == 2) {
+                        String worldName = parts[0];
+                        String assetCode = parts[1];
+                        World world = getServer().getWorld(worldName);
+                        if (world != null) {
+                            Assets.deleteAsset(world, assetCode);
+                            AssetDataCache.invalidate(world, assetCode);
+                        }
+                    }
+                });
+
+                // Sync asset edits across servers
+                redisManager.subscribe("asset_updated", message -> {
+                    // message format: "worldName:oldCode:newCode:assetType:colorRgb:name"
+                    String[] parts = message.split(":", 6);
+                    if (parts.length == 6) {
+                        try {
+                            String worldName = parts[0];
+                            String oldCode = parts[1];
+                            String newCode = parts[2];
+                            int assetType = Integer.parseInt(parts[3]);
+                            int colorRgb = Integer.parseInt(parts[4]);
+                            String name = parts[5];
+                            World world = getServer().getWorld(worldName);
+                            if (world != null) {
+                                Assets.deleteAsset(world, oldCode);
+                                Asset updated = new Asset(newCode, assetType, TextColor.color(colorRgb), name);
+                                Assets.addAsset(world, newCode, assetType, Asset.metaData(updated));
+                                AssetDataCache.invalidate(world, oldCode);
+                                AssetDataCache.invalidate(world, newCode);
+                            }
+                        } catch (NumberFormatException | IOException ignored) {}
                     }
                 });
             }
@@ -205,6 +311,9 @@ public final class Profitable extends JavaPlugin {
         getCommand("orders").setExecutor(new OrdersCommand());
         getCommand("orders").setTabCompleter(new OrdersCommand.CommandTabCompleter());
 
+        getCommand("price").setExecutor(new PriceCommand());
+        getCommand("price").setTabCompleter(new PriceCommand.CommandTabCompleter());
+
         getCommand("delivery").setExecutor(new DeliveryCommand());
         getCommand("delivery").setTabCompleter(new DeliveryCommand.CommandTabCompleter());
 
@@ -271,7 +380,7 @@ public final class Profitable extends JavaPlugin {
 
             if (matcher.find()) {
                 String latestVersion = matcher.group(1).replace("v", "");
-                String currentVersion = plugin.getDescription().getVersion();
+                String currentVersion = plugin.getPluginMeta().getVersion();
 
                 if (!latestVersion.equalsIgnoreCase(currentVersion)) {
                     plugin.getLogger().warning("UPDATE AVAILABLE! Latest: " + latestVersion);

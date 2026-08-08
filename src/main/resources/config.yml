@@ -43,6 +43,14 @@ redis:
   password:
   # Prefix prepended to all channel names used by this plugin
   channel-prefix: "profitable"
+  # Maximum number of reconnection attempts before giving up
+  reconnect-attempts: 5
+  # Base delay between reconnection attempts in milliseconds (linear backoff)
+  reconnect-delay-ms: 2000
+  # Sync order cancellations across servers
+  sync-orders: true
+  # Sync balance changes across servers (higher performance overhead)
+  sync-balances: false
 
 exchange:
   fees: # Fixed: 23    Percentage: 23%
@@ -120,12 +128,11 @@ exchange:
         - POTATO
         - POISONOUS_POTATO
         - BEETROOT
-        - FISH
-        - RAW_COD
-        - RAW_SALMON
+        - COD
+        - SALMON
         - TROPICAL_FISH
         - PUFFERFISH
-        - SUGARCANE
+        - SUGAR_CANE
         - KELP
         - COCOA_BEANS
         - HONEY_BOTTLE
@@ -162,7 +169,6 @@ exchange:
         - BAMBOO
         - CACTUS
         - POWDER_SNOW_BUCKET
-        - INK_SAC
         - WATER_BUCKET
         - MILK_BUCKET
         - LAVA_BUCKET

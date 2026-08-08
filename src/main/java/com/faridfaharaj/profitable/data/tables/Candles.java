@@ -14,6 +14,7 @@ import net.kyori.adventure.text.event.HoverEvent;
 import org.bukkit.World;
 
 import java.sql.PreparedStatement;
+import java.util.logging.Level;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -60,7 +61,7 @@ public class Candles {
                 stmt.executeUpdate();
 
             } catch (SQLException e) {
-                e.printStackTrace();
+                Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
                 return false;
             }
 
@@ -70,18 +71,11 @@ public class Candles {
     }
 
     public static Candle getLastDay(World world,String asset, long time) {
-        String sql = "SELECT time, open, close, high, low, volume FROM candles_day WHERE world = ? AND asset_id = ? AND time = ? " +
-                "UNION ALL " +
-                "SELECT time, close AS open, close, close AS high, close AS low, 0 AS volume FROM candles_day WHERE world = ? AND asset_id = ? AND time = (SELECT MAX(time) FROM candles_day WHERE world = ? AND asset_id = ?) LIMIT 1;";
+        String sql = "SELECT time, open, close, high, low, volume FROM candles_day WHERE world = ? AND asset_id = ? ORDER BY time DESC LIMIT 1;";
 
         try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
             stmt.setBytes(1, MessagingUtil.getWorldId(world));
             stmt.setString(2, asset);
-            stmt.setLong(3, (time / intervals[0]) * intervals[0]);
-            stmt.setBytes(4, MessagingUtil.getWorldId(world));
-            stmt.setString(5, asset);
-            stmt.setBytes(6, MessagingUtil.getWorldId(world));
-            stmt.setString(7, asset);
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
@@ -95,7 +89,7 @@ public class Candles {
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
 
         return new Candle(0, 0, 0, 0, 0);
@@ -165,10 +159,57 @@ public class Candles {
             }
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
 
         return result;
+    }
+
+    /**
+     * Returns a summary of the latest price movement for an asset.
+     * Candle fields: open = previous close (or same close when only one record exists),
+     * close = latest close, high/low/volume = latest candle values.
+     * Returns null when the asset has no transaction records.
+     */
+    public static Candle getPriceSummary(World world, String asset) {
+        String sql = "SELECT time, open, close, high, low, volume FROM candles_day WHERE world = ? AND asset_id = ? ORDER BY time DESC LIMIT 2;";
+
+        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
+            stmt.setBytes(1, MessagingUtil.getWorldId(world));
+            stmt.setString(2, asset);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+
+                Candle latest = null;
+                double previousClose = -1;
+
+                if (rs.next()) {
+                    latest = new Candle(
+                            rs.getDouble("open"),
+                            rs.getDouble("close"),
+                            rs.getDouble("high"),
+                            rs.getDouble("low"),
+                            rs.getDouble("volume")
+                    );
+                    previousClose = latest.getOpen();
+                }
+
+                if (latest == null) {
+                    return null;
+                }
+
+                if (rs.next()) {
+                    previousClose = rs.getDouble("close");
+                }
+
+                return new Candle(previousClose, latest.getClose(), latest.getHigh(), latest.getLow(), latest.getVolume());
+            }
+
+        } catch (SQLException e) {
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
+        }
+
+        return null;
     }
 
     public static List<Candle> getInterval(World world,String asset, long time, int interval) {
@@ -233,7 +274,7 @@ public class Candles {
                 candles.add(new Candle(-1, -1, maxPrice, minPrice, maxVol));
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
 
         return candles;
@@ -296,7 +337,7 @@ public class Candles {
 
             return component;
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
 
         return Component.text("error").color(Configuration.COLORERROR);
@@ -311,7 +352,7 @@ public class Candles {
             stmt.executeUpdate();
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
 
         sql = "DELETE FROM candles_week WHERE world = ? AND asset_id = ?;";
@@ -322,7 +363,7 @@ public class Candles {
             stmt.executeUpdate();
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
 
         sql = "DELETE FROM candles_month WHERE world = ? AND asset_id = ?;";
@@ -333,7 +374,7 @@ public class Candles {
             stmt.executeUpdate();
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
 
     }

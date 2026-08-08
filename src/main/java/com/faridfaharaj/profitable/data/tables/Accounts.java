@@ -10,7 +10,9 @@ import org.bukkit.entity.Player;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
 import java.io.*;
+import java.util.logging.Level;
 import java.nio.ByteBuffer;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.security.spec.InvalidKeySpecException;
@@ -19,12 +21,13 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class Accounts {
 
-    private static HashMap<UUID, String> currentAccounts = new HashMap<>();
+    private static final ConcurrentHashMap<UUID, String> currentAccounts = new ConcurrentHashMap<>();
 
-    public static HashMap getCurrentAccounts(){
+    public static ConcurrentHashMap<UUID, String> getCurrentAccounts(){
         return  currentAccounts;
     }
 
@@ -57,7 +60,7 @@ public class Accounts {
             }
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
 
         return 0;
@@ -88,7 +91,7 @@ public class Accounts {
             return true;
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
 
         return false;
@@ -121,7 +124,7 @@ public class Accounts {
             return true;
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
 
         return false;
@@ -148,7 +151,7 @@ public class Accounts {
             }
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
 
         return null;
@@ -171,7 +174,7 @@ public class Accounts {
             return stmt.executeUpdate() > 0;
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
 
         return false;
@@ -191,7 +194,7 @@ public class Accounts {
             return stmt.executeUpdate() > 0;
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -212,7 +215,7 @@ public class Accounts {
             return stmt.executeUpdate() > 0;
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -221,7 +224,7 @@ public class Accounts {
     }
 
     public static String getEntityClaimId(World world, String name) {
-        String sql = "SELECT * FROM accounts WHERE world = ? AND account_name = ?;";
+        String sql = "SELECT entity_claim_id FROM accounts WHERE world = ? AND account_name = ?;";
 
         try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
             stmt.setBytes(1, MessagingUtil.getWorldId(world));
@@ -236,14 +239,14 @@ public class Accounts {
             }
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
 
         return null;
     }
 
     public static Location getItemDelivery(World world, String name) {
-        String sql = "SELECT * FROM accounts WHERE world = ? AND account_name = ?;";
+        String sql = "SELECT item_delivery_pos FROM accounts WHERE world = ? AND account_name = ?;";
 
         try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
             stmt.setBytes(1, MessagingUtil.getWorldId(world));
@@ -264,14 +267,14 @@ public class Accounts {
             }
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
 
         return null;
     }
 
     public static Location getEntityDelivery(World world, String name) {
-        String sql = "SELECT * FROM accounts WHERE world = ? AND account_name = ?;";
+        String sql = "SELECT entity_delivery_pos FROM accounts WHERE world = ? AND account_name = ?;";
 
         try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
             stmt.setBytes(1, MessagingUtil.getWorldId(world));
@@ -292,7 +295,7 @@ public class Accounts {
             }
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
 
         return null;
@@ -309,7 +312,7 @@ public class Accounts {
             return 0 < affected;
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
         return false;
     }
@@ -348,16 +351,8 @@ public class Accounts {
 
         byte[] comparedHash = hashPassword(password, hashedpassword.getValue());
 
-        if (hashedpassword.getKey().length != comparedHash.length) {
-            return false;
-        }
-
-        for (int i = 0; i < hashedpassword.getKey().length; i++) {
-            if (hashedpassword.getKey()[i] != comparedHash[i]) {
-                return false;
-            }
-        }
-        return true;
+        // Use constant-time comparison to prevent timing attacks
+        return MessageDigest.isEqual(hashedpassword.getKey(), comparedHash);
     }
 
     public static byte[][] hashPassword(String password) {

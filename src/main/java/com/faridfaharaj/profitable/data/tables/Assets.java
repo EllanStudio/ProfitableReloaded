@@ -13,6 +13,7 @@ import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.World;
 
 import java.io.ByteArrayInputStream;
+import java.util.logging.Level;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.sql.PreparedStatement;
@@ -37,11 +38,11 @@ public class Assets {
             stmt.setBytes(4, meta);
 
             stmt.executeUpdate();
-
+            AssetDataCache.invalidate(world, symbol);
             return true;
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
 
         return false;
@@ -59,7 +60,7 @@ public class Assets {
             stmt.executeUpdate();
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
     }
 
@@ -73,10 +74,15 @@ public class Assets {
             stmt.setBytes(3, MessagingUtil.getWorldId(world));
             stmt.setString(4, assetID);
 
-            return stmt.executeUpdate() > 0;
+            boolean success = stmt.executeUpdate() > 0;
+            if (success) {
+                AssetDataCache.invalidate(world, assetID);
+                AssetDataCache.invalidate(world, updatedAsset.getCode());
+            }
+            return success;
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -85,7 +91,13 @@ public class Assets {
     }
 
     public static Asset getAssetData(World world, String assetID) {
-        String sql = "SELECT * FROM assets WHERE world = ? AND asset_id = ?;";
+        // Check cache first
+        Asset cached = AssetDataCache.get(world, assetID);
+        if (cached != null) {
+            return cached;
+        }
+
+        String sql = "SELECT asset_type, meta FROM assets WHERE world = ? AND asset_id = ?;";
 
         try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
             stmt.setBytes(1, MessagingUtil.getWorldId(world));
@@ -128,20 +140,22 @@ public class Assets {
                         name = assetID.toLowerCase();
                     }
 
-                    return new Asset(assetID, rs.getInt("asset_type"), color, name, stringList, numericList);
-
+                    Asset asset = new Asset(assetID, rs.getInt("asset_type"), color, name, stringList, numericList);
+                    // Cache the result
+                    AssetDataCache.put(world, assetID, asset);
+                    return asset;
                 }
             }
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
 
         return null;
     }
 
     public static Collection<String> getAssetCodeType(World world, int type) {
-        String sql = "SELECT * FROM assets WHERE world = ? AND asset_type = ?;";
+        String sql = "SELECT asset_id FROM assets WHERE world = ? AND asset_type = ?;";
 
         Collection<String> assetsFound = new ArrayList<>();
         try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
@@ -155,7 +169,7 @@ public class Assets {
             }
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
 
         return assetsFound;
@@ -178,7 +192,7 @@ public class Assets {
             }
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
 
         return assetsFound;
@@ -198,7 +212,7 @@ public class Assets {
             }
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
 
         return assetsFound;
@@ -211,10 +225,13 @@ public class Assets {
             stmt.setBytes(1, MessagingUtil.getWorldId(world));
             stmt.setString(2, asset);
             int affected = stmt.executeUpdate();
+            if (affected > 0) {
+                AssetDataCache.invalidate(world, asset);
+            }
             return affected > 0;
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
             return false;
         }
 

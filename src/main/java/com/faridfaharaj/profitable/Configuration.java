@@ -1,6 +1,8 @@
 package com.faridfaharaj.profitable;
 
 import com.faridfaharaj.profitable.data.holderClasses.Asset;
+
+import java.util.logging.Level;
 import com.faridfaharaj.profitable.data.tables.Assets;
 import com.faridfaharaj.profitable.hooks.PlayerPointsHook;
 import com.faridfaharaj.profitable.util.RandomUtil;
@@ -78,14 +80,17 @@ public class Configuration {
             if (config.getBoolean("exchange.commodities.generation.item-whitelisting")) {
 
                 Set<String> itemWhitelist = new HashSet<>(Profitable.getInstance().getConfig().getStringList("exchange.commodities.generation.commodity-item-whitelist"));
-
+                Set<String> validMaterials = new HashSet<>();
                 for (Material material : Material.values()) {
-                    String name = material.name();
+                    validMaterials.add(material.name());
+                }
 
-                    if (itemWhitelist.contains(name)) {
-                        ALLOWEITEMS.add(name);
+                for (String entry : itemWhitelist) {
+                    if (validMaterials.contains(entry)) {
+                        ALLOWEITEMS.add(entry);
+                    } else {
+                        profitable.getLogger().warning("Commodity whitelist: unknown Material '" + entry + "' - skipping");
                     }
-
                 }
 
             } else {
@@ -98,26 +103,29 @@ public class Configuration {
                     if (!itemBlacklist.contains(name)) {
                         ALLOWEITEMS.add(name);
                     }
-
                 }
 
             }
 
             if (config.getBoolean("exchange.commodities.generation.entity-whitelisting")) {
                 Set<String> entityWhitelist = new HashSet<>(Profitable.getInstance().getConfig().getStringList("exchange.commodities.generation.commodity-entity-whitelist"));
+                Set<String> validEntities = new HashSet<>();
 
                 for (EntityType entity : EntityType.values()) {
                     String name = entity.name();
-
                     Class<?> entityClass = entity.getEntityClass();
                     if (entityClass == null || !LivingEntity.class.isAssignableFrom(entityClass) || name.equals("PLAYER")) {
                         continue;
                     }
+                    validEntities.add(name);
+                }
 
-                    if (entityWhitelist.contains(name)) {
-                        ALLOWENTITIES.add(name);
+                for (String entry : entityWhitelist) {
+                    if (validEntities.contains(entry)) {
+                        ALLOWENTITIES.add(entry);
+                    } else {
+                        profitable.getLogger().warning("Commodity entity whitelist: unknown EntityType '" + entry + "' - skipping");
                     }
-
                 }
 
                 profitable.getLogger().info("Commodities to be generated:");
@@ -210,14 +218,14 @@ public class Configuration {
             try{
                 return Double.parseDouble(stringfee.replace("%",""))/100*amount;
             }catch (Exception e){
-                e.printStackTrace();
+                Profitable.getInstance().getLogger().log(Level.SEVERE, "Configuration error", e);
             }
 
         }else{
             try{
                 return Double.parseDouble(stringfee);
             }catch (Exception e){
-                e.printStackTrace();
+                Profitable.getInstance().getLogger().log(Level.SEVERE, "Configuration error", e);
             }
         }
 

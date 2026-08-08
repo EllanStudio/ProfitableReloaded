@@ -12,6 +12,7 @@ import net.kyori.adventure.text.Component;
 import org.bukkit.World;
 
 import java.sql.PreparedStatement;
+import java.util.logging.Level;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -34,7 +35,7 @@ public class AccountHoldings {
             return rows > 0;
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
 
         return false;
@@ -51,13 +52,13 @@ public class AccountHoldings {
             stmt.executeUpdate();
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
 
     }
 
     public static double getAccountAssetBalance(World world,String account, String asset) {
-        String sql = "SELECT * FROM account_assets WHERE world = ? AND account_name = ? AND asset_id = ?;";
+        String sql = "SELECT quantity FROM account_assets WHERE world = ? AND account_name = ? AND asset_id = ?;";
 
         try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
             stmt.setBytes(1, MessagingUtil.getWorldId(world));
@@ -71,7 +72,7 @@ public class AccountHoldings {
             }
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
 
         return 0;
@@ -123,7 +124,7 @@ public class AccountHoldings {
             }
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         }
 
         return balances;
