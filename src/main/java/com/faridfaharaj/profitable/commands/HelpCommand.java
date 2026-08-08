@@ -1,7 +1,9 @@
 package com.faridfaharaj.profitable.commands;
 
+import com.faridfaharaj.profitable.Configuration;
 import com.faridfaharaj.profitable.util.MessagingUtil;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -69,6 +71,12 @@ public class HelpCommand implements CommandExecutor {
 > /orders
 §e Displays all active orders on your account §r
 -----
+> /orders cancelall
+§e Cancels every active order on your account at once §r
+-----
+> /price <Asset>
+§e Shows the latest price, day change, range and volume of an asset §r
+-----
 > /delivery
 §e Displays delivery locations of your account §r
 -----
@@ -103,6 +111,9 @@ public class HelpCommand implements CommandExecutor {
 §e Gives you a map containing a candles graph showcasing price movements across a certain time frame §r""", """
 > /admin config reload
 §e Reloads and updates most config changes §r
+-----
+> /admin status
+§e Shows a summary of the exchange status §r
 -----
 > /admin getplayeracc <player>
 §e shows player's current active account §r
@@ -195,14 +206,14 @@ public class HelpCommand implements CommandExecutor {
             page = 0;
         }
 
-        /*
-        MessagingUtil.sendCustomMessage(sender,
-                MessagingUtil.profitableTopSeparator("Help", "-------------------").appendNewline()
-                        .append(Component.text(pages[page])).appendNewline()
-                        .append(MessagingUtil.profitableBottomSeparator())
-        );
+        Component content = LegacyComponentSerializer.legacySection().deserialize(pages[page]);
 
-         */
+        MessagingUtil.sendComponentMessage(sender,
+                Component.text("========== [ ", Configuration.COLORPROFITABLE)
+                        .append(Component.text("Profitable Help", Configuration.COLORHIGHLIGHT))
+                        .append(Component.text(" ] ==========", Configuration.COLORPROFITABLE)).appendNewline()
+                        .append(content)
+        );
 
         return true;
     }

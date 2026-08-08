@@ -7,6 +7,7 @@ import com.faridfaharaj.profitable.data.tables.Assets;
 import com.faridfaharaj.profitable.tasks.TemporalItems;
 import com.faridfaharaj.profitable.tasks.gui.ChestGUI;
 import com.faridfaharaj.profitable.util.MessagingUtil;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -110,7 +111,7 @@ public class Events implements Listener {
         if(Objects.equals(TemporalItems.holdingTemp.get(player.getUniqueId()), TemporalItems.TemporalItem.CLAIMINGTAG)){
             runItmCooldown(Material.NAME_TAG, event.getPlayer(), () -> {
                 Entity entity = event.getRightClicked();
-                if(entity.getCustomName() != null){
+                if(entity.customName() != null){
                     MessagingUtil.sendComponentMessage(player, Profitable.getLang().get("assets.error.cant-reclaim-entity"));
                 }else if(!Configuration.ALLOWENTITIES.contains(entity.getType().name())){
                     MessagingUtil.sendComponentMessage(player, Profitable.getLang().get("assets.error.cant-claim-entity"));
@@ -119,7 +120,8 @@ public class Events implements Listener {
 
                     Runnable claim = () -> {
                         Profitable.getfolialib().getScheduler().runAtEntity(entity, task -> {
-                            entity.setCustomName(Accounts.getEntityClaimId(player.getWorld(), Accounts.getAccount(player)));
+                            String claimId = Accounts.getEntityClaimId(player.getWorld(), Accounts.getAccount(player));
+                            entity.customName(claimId == null ? null : LegacyComponentSerializer.legacySection().deserialize(claimId));
                         });
                         MessagingUtil.sendComponentMessage(player,Profitable.getLang().get("assets.entity-claim-notice",
                             Map.entry("%entity%", entity.getName()),

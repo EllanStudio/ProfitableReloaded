@@ -93,7 +93,7 @@ public final class AssetExplorer extends ChestGUI {
                 }
             }
 
-            pages = assetCache[assetType].length/21;
+            pages = (int) Math.ceil((double) assetCache[assetType].length / 21);
 
             updatePage();
 
@@ -183,7 +183,7 @@ public final class AssetExplorer extends ChestGUI {
                 }if(click.isRightClick()){
                     page-=1;
                 }
-                page = Math.clamp(page, 0, pages);
+                page = Math.clamp(page, 0, Math.max(0, pages - 1));
                 updatePage();
                 pageButton.setDisplayName(Profitable.getLang().get("gui.generic.buttons.page-selector.name",
                         Map.entry("%page%",String.valueOf(page)),

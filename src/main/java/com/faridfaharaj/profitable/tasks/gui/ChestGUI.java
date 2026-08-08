@@ -1,9 +1,7 @@
 package com.faridfaharaj.profitable.tasks.gui;
 
 import com.faridfaharaj.profitable.Profitable;
-import com.tcoded.folialib.FoliaLib;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -12,19 +10,13 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
-import org.jetbrains.annotations.NotNull;
 
 public abstract class ChestGUI implements InventoryHolder {
 
     private final Inventory inventory;
 
     public ChestGUI(int height, Component title){
-
-        if(Profitable.getfolialib().isSpigot()){
-            inventory = Bukkit.createInventory(this, 9*height, LegacyComponentSerializer.legacySection().serialize(title));
-        }else {
-            inventory = Bukkit.createInventory(this, 9*height, title);
-        }
+        inventory = Bukkit.createInventory(this, 9*height, title);
     }
 
     public void openGui(Player player){
@@ -40,7 +32,7 @@ public abstract class ChestGUI implements InventoryHolder {
     protected void fillSlot(int slot, ItemStack item){
         ItemStack itemStack = new ItemStack(item);
         ItemMeta metaAccountButton = itemStack.getItemMeta();
-        metaAccountButton.setDisplayName(" ");
+        metaAccountButton.itemName(Component.space());
         itemStack.setItemMeta(metaAccountButton);
         inventory.setItem(slot, itemStack);
     }
@@ -48,7 +40,7 @@ public abstract class ChestGUI implements InventoryHolder {
     protected void fillSlots(int x1, int y1, int x2, int y2, Material item){
         ItemStack itemStack = new ItemStack(item);
         ItemMeta metaAccountButton = itemStack.getItemMeta();
-        metaAccountButton.setDisplayName(" ");
+        metaAccountButton.itemName(Component.space());
         itemStack.setItemMeta(metaAccountButton);
 
         for(int i = y1; i <= y2; i++){
@@ -70,7 +62,7 @@ public abstract class ChestGUI implements InventoryHolder {
     public abstract void slotInteracted(Player player, int slot, ClickType click);
 
     @Override
-    public @NotNull Inventory getInventory() {
+    public Inventory getInventory() {
         return inventory;
     }
 

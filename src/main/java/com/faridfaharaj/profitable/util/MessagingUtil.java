@@ -8,8 +8,6 @@ import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.minimessage.MiniMessage;
-import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
-import net.md_5.bungee.chat.ComponentSerializer;
 import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -60,24 +58,14 @@ public class MessagingUtil {
     }
 
     public static void sendComponentMessage(CommandSender sender, Component component){
-
-        if(Profitable.getfolialib().isSpigot()){
-
-            String jsonMessage = GsonComponentSerializer.gson().serialize(component);
-            sender.spigot().sendMessage(ComponentSerializer.parse(jsonMessage));
-
-        }else {
-
-            if(sender instanceof Player player){
-                Profitable.getfolialib().getScheduler().runAtEntity(player, task -> {
-                    sender.sendMessage(component);
-                });
-            }else{
-                Profitable.getfolialib().getScheduler().runNextTick(task -> {
-                    sender.sendMessage(component);
-                });
-            }
-
+        if(sender instanceof Player player){
+            Profitable.getfolialib().getScheduler().runAtEntity(player, task -> {
+                sender.sendMessage(component);
+            });
+        }else{
+            Profitable.getfolialib().getScheduler().runNextTick(task -> {
+                sender.sendMessage(component);
+            });
         }
     }
 

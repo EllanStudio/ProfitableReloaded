@@ -6,6 +6,7 @@ import com.faridfaharaj.profitable.data.tables.Assets;
 import com.faridfaharaj.profitable.data.holderClasses.Asset;
 import com.faridfaharaj.profitable.util.MessagingUtil;
 
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
@@ -114,7 +115,7 @@ public class TemporalItems {
         ItemMeta meta = item.getItemMeta();
 
         if (meta != null) {
-            meta.setDisplayName(displayName);
+            meta.itemName(LegacyComponentSerializer.legacySection().deserialize(displayName));
             meta.setEnchantmentGlintOverride(true);
             item.setItemMeta(meta);
         }

@@ -3,7 +3,7 @@ version: ${project.version}
 main: com.faridfaharaj.profitable.Profitable
 author: faridfaharaj
 prefix: "Profitable"
-api-version: '1.21.4'
+api-version: '26.2'
 description: "Real supply and demand in minecraft!"
 website: "https://github.com/faridfaharaj/Profitable"
 softdepend:
@@ -60,8 +60,13 @@ commands:
 
   orders:
     description: Displays all active orders on your account
-    usage: /orders
+    usage: /orders or /orders cancelall
     aliases: [ ]
+
+  price:
+    description: Shows the latest price and daily change of an asset
+    usage: /price <Asset> or /price hand
+    aliases: [quote] 
 
   admin:
     description: Admin commands
@@ -100,6 +105,9 @@ permissions:
   profitable.asset.graphs:
     description: "Grants the ability to view graphs that display prices from an asset"
     default: true
+  profitable.asset.price:
+    description: "Grants the ability to check the latest price of an asset"
+    default: true
 
   profitable.asset.*:
     description: "Grants access to all public information from assets"
@@ -109,6 +117,7 @@ permissions:
       profitable.asset.categories: true
       profitable.asset.info: true
       profitable.asset.graphs: true
+      profitable.asset.price: true
 
   profitable.account.claim:
     description: "Grants the ability to own entities to trade on the exchange"
@@ -133,6 +142,9 @@ permissions:
     default: true
   profitable.account.manage.orders.cancel:
     description: "Grants the ability to cancel orders on own account"
+    default: true
+  profitable.account.manage.orders.cancelall:
+    description: "Grants the ability to cancel all orders on own account at once"
     default: true
   profitable.account.funds.deposit:
     description: "Grants the ability to deposit external currencies"
@@ -162,6 +174,7 @@ permissions:
       profitable.account.manage.logout: true
       profitable.account.manage.setdelivery: true
       profitable.account.manage.orders.cancel: true
+      profitable.account.manage.orders.cancelall: true
       profitable.account.funds.deposit: true
       profitable.account.funds.withdraw: true
       profitable.account.info.orders: true
@@ -179,6 +192,7 @@ permissions:
       profitable.account.manage.logout: true
       profitable.account.manage.setdelivery: true
       profitable.account.manage.orders.cancel: true
+      profitable.account.manage.orders.cancelall: true
 
   profitable.account.info.*:
     description: "Grants access to view all information on owns' active account"
@@ -191,6 +205,10 @@ permissions:
 
   profitable.admin.config.reloadconfig:
     description: "Grants the ability to reload most configuration file values"
+    default: op
+
+  profitable.admin.info.status:
+    description: "Grants the ability to view the exchange status summary"
     default: op
 
   profitable.admin.accounts.info.getplayeracc:
@@ -236,6 +254,9 @@ permissions:
   profitable.admin.assets.manage.delete:
     description: "Allows DELETION of assets"
     default: op
+  profitable.admin.assets.manage.edit:
+    description: "Allows editing the symbol, name and color of registered currencies"
+    default: op
   profitable.admin.assets.info.getallassets:
     description: "Allows looking at all assets at once"
     default: op
@@ -264,6 +285,7 @@ permissions:
     default: op
     children:
       profitable.admin.config.reloadconfig: true
+      profitable.admin.info.status: true
       profitable.admin.accounts.info.getplayeracc: true
       profitable.admin.accounts.info.wallet: true
       profitable.admin.accounts.info.delivery: true
@@ -278,6 +300,7 @@ permissions:
       profitable.admin.assets.manage.newtransaction: true
       profitable.admin.assets.manage.resettransactions: true
       profitable.admin.assets.manage.delete: true
+      profitable.admin.assets.manage.edit: true
       profitable.admin.assets.info.getallassets: true
       profitable.admin.orders.manage.cancel: true
       profitable.admin.orders.manage.delete: true
@@ -329,6 +352,7 @@ permissions:
       profitable.admin.assets.manage.newtransaction: true
       profitable.admin.assets.manage.resettransactions: true
       profitable.admin.assets.manage.delete: true
+      profitable.admin.assets.manage.edit: true
       profitable.admin.assets.info.getallassets: true
 
   profitable.admin.orders.*:
@@ -346,6 +370,7 @@ permissions:
     description: "Allows to view all exchange information"
     default: op
     children:
+      profitable.admin.info.status: true
       profitable.admin.accounts.info.getplayeracc: true
       profitable.admin.accounts.info.wallet: true
       profitable.admin.accounts.info.delivery: true

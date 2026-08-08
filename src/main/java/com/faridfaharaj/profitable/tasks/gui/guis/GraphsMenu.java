@@ -65,36 +65,27 @@ public final class GraphsMenu extends ChestGUI {
             player.closeInventory();
             new AssetExplorer(player, 2, cache).openGui(player);
         }else if(slot == graph1MButton.getSlot()){
-            player.closeInventory();
-            MessagingUtil.sendComponentMessage(player, Profitable.getLang().get("assets.loading-graph"));
-            Profitable.getfolialib().getScheduler().runAsync(task -> {
-                TemporalItems.sendGraphMap(player, assetid, 720000, "1M");
-            });
+            loadAndSendGraph(player, 720000, "1M");
         } else if (slot == graph3MButton.getSlot()) {
-            player.closeInventory();
-            MessagingUtil.sendComponentMessage(player, Profitable.getLang().get("assets.loading-graph"));
-            Profitable.getfolialib().getScheduler().runAsync(task -> {
-                TemporalItems.sendGraphMap(player, assetid, 2160000, "3M");
-            });
+            loadAndSendGraph(player, 2160000, "3M");
         } else if (slot == graph6MButton.getSlot()) {
-            player.closeInventory();
-            MessagingUtil.sendComponentMessage(player, Profitable.getLang().get("assets.loading-graph"));
-            Profitable.getfolialib().getScheduler().runAsync(task -> {
-                TemporalItems.sendGraphMap(player, assetid, 4320000, "6M");
-            });
+            loadAndSendGraph(player, 4320000, "6M");
         } else if (slot == graph1YButton.getSlot()) {
-            player.closeInventory();
-            MessagingUtil.sendComponentMessage(player, Profitable.getLang().get("assets.loading-graph"));
-            Profitable.getfolialib().getScheduler().runAsync(task -> {
-                TemporalItems.sendGraphMap(player, assetid, 8760000, "1Y");
-            });
+            loadAndSendGraph(player, 8760000, "1Y");
         } else if (slot == graph2YButton.getSlot()) {
-            player.closeInventory();
-            MessagingUtil.sendComponentMessage(player, Profitable.getLang().get("assets.loading-graph"));
-            Profitable.getfolialib().getScheduler().runAsync(task -> {
-                TemporalItems.sendGraphMap(player, assetid, 17520000, "2Y");
-            });
+            loadAndSendGraph(player, 17520000, "2Y");
         }
 
+    }
+
+    /**
+     * Closes the GUI, sends a loading message, and asynchronously generates the graph map.
+     */
+    private void loadAndSendGraph(Player player, long ticks, String label) {
+        player.closeInventory();
+        MessagingUtil.sendComponentMessage(player, Profitable.getLang().get("assets.loading-graph"));
+        Profitable.getfolialib().getScheduler().runAsync(task -> {
+            TemporalItems.sendGraphMap(player, assetid, ticks, label);
+        });
     }
 }

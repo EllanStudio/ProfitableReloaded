@@ -11,6 +11,9 @@ temp-items:
 
 orders:
   cancel: "<gray>Cancelled <yellow>%order%</yellow></gray>"
+  cancelall: "<gray>Cancelled <yellow>%amount%</yellow> orders</gray>"
+  error:
+    no-orders: "<red>You have no active orders</red>"
   order-types:
     limit-order: "limit"
     market-order: "market"
@@ -93,6 +96,11 @@ delivery:
     items-must-be-container: "<red>Item delivery location must be a container</red>"
     missing-item-delivery:
     missing-entity-delivery:
+
+price:
+  no-data: "<red>No price data available for %asset% yet</red>"
+  error:
+    main-currency: "<red>%asset% is the main currency and cannot be traded</red>"
 
 hooks:
   error:

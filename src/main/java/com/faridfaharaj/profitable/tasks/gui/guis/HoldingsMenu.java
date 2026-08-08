@@ -43,7 +43,7 @@ public final class HoldingsMenu extends ChestGUI {
         Profitable.getfolialib().getScheduler().runAsync(task -> {
             assets = AccountHoldings.AssetBalancesToAssetData(player.getWorld(), Accounts.getAccount(player));
 
-            pages = assets.size()/21;
+            pages = (int) Math.ceil((double) assets.size() / 21);
 
 
             updatePage();
@@ -100,7 +100,7 @@ public final class HoldingsMenu extends ChestGUI {
                 }if(click.isRightClick()){
                     page-=1;
                 }
-                page = Math.clamp(page, 0, pages);
+                page = Math.clamp(page, 0, Math.max(0, pages - 1));
                 updatePage();
                 pageButton.setDisplayName(Profitable.getLang().get("gui.generic.buttons.page-selector.name",
                         Map.entry("%page%",String.valueOf(page)),

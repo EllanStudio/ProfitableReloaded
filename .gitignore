@@ -3,3 +3,4 @@ Testing/
 Profitable.iml
 dependency-reduced-pom.xml
 target
+*.class

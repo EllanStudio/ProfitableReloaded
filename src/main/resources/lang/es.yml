@@ -11,6 +11,9 @@ temp-items:
 
 orders:
   cancel: "<gray>Orden cancelada <yellow>%order%</yellow></gray>"
+  cancelall: "<gray>Se cancelaron <yellow>%amount%</yellow> órdenes</gray>"
+  error:
+    no-orders: "<red>No tienes órdenes activas</red>"
   order-types:
     limit-order: "límite"
     market-order: "mercado"
@@ -90,6 +93,11 @@ delivery:
     items-must-be-container: "<red>La entrega de ítems debe ser en un contenedor</red>"
     missing-item-delivery: "<red>Falta especificar la entrega de ítems</red>"
     missing-entity-delivery: "<red>Falta especificar la entrega de entidades</red>"
+
+price:
+  no-data: "<red>Aún no hay datos de precio para %asset%</red>"
+  error:
+    main-currency: "<red>%asset% es la moneda principal y no puede comerciarse</red>"
 
 hooks:
   error:

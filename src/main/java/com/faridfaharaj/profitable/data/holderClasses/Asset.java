@@ -10,6 +10,7 @@ import com.faridfaharaj.profitable.util.RandomUtil;
 import com.faridfaharaj.profitable.util.MessagingUtil;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.Chest;
@@ -250,10 +251,12 @@ public class Asset {
 
             case 4: // Fluid
 
+                Profitable.getInstance().getLogger().warning("Fluid asset distribution is not yet implemented for asset: " + asset.getCode());
                 return;
 
             case 5: // Energy
 
+                Profitable.getInstance().getLogger().warning("Energy asset distribution is not yet implemented for asset: " + asset.getCode());
                 return;
 
             default: // numerical value
@@ -318,7 +321,7 @@ public class Asset {
 
             for(int i = 0; i<amount; i++){
                 Entity entity = world.spawnEntity(location, entityType);
-                entity.setCustomName(claimId);
+                entity.customName(claimId == null ? null : LegacyComponentSerializer.legacySection().deserialize(claimId));
                 entity.setCustomNameVisible(true);
             }
 
@@ -333,9 +336,17 @@ public class Asset {
     public static void sendCommodityItem(World world, String account, String asset, int amount){
 
         Material material = Material.getMaterial(asset);
+        if (material == null) {
+            Profitable.getInstance().getLogger().warning("sendCommodityItem: unknown Material '" + asset + "'");
+            return;
+        }
         int maxStackSize = material.getMaxStackSize();
 
         Location location = Accounts.getItemDelivery(world, account);
+        if (location == null) {
+            Profitable.getInstance().getLogger().warning("sendCommodityItem: delivery location is null for account '" + account + "'");
+            return;
+        }
 
         Profitable.getfolialib().getScheduler().runAtLocation(location, task -> {
 
@@ -375,15 +386,23 @@ public class Asset {
     public static void sendCommodityEntity(World world, String account, String asset, int amount){
 
         EntityType entityType = EntityType.fromName(asset);
+        if (entityType == null) {
+            Profitable.getInstance().getLogger().warning("sendCommodityEntity: unknown EntityType '" + asset + "'");
+            return;
+        }
 
         Location location = Accounts.getEntityDelivery(world ,account);
+        if (location == null) {
+            Profitable.getInstance().getLogger().warning("sendCommodityEntity: delivery location is null for account '" + account + "'");
+            return;
+        }
         String claimId = Accounts.getEntityClaimId(world ,account);
         Profitable.getfolialib().getScheduler().runAtLocation(location, task -> {
             World deliveryWorld = location.getWorld();
 
             for(int i = 0; i<amount; i++){
                 Entity entity = deliveryWorld.spawnEntity(location, entityType);
-                entity.setCustomName(claimId);
+                entity.customName(claimId == null ? null : LegacyComponentSerializer.legacySection().deserialize(claimId));
                 entity.setCustomNameVisible(true);
             }
 
@@ -458,9 +477,11 @@ public class Asset {
                 }
                 break;
             case 4: // Fluid
-                    return;
+                Profitable.getInstance().getLogger().warning("Fluid asset charging is not yet implemented for asset: " + asset.getCode());
+                return;
             case 5: // Energy
-                    return;
+                Profitable.getInstance().getLogger().warning("Energy asset charging is not yet implemented for asset: " + asset.getCode());
+                return;
             default: // any numerical value
 
                 String account = Accounts.getAccount(player);
@@ -581,7 +602,7 @@ public class Asset {
         List<Entity> nearbyEntities = player.getNearbyEntities(20, 20, 20);
         for(Entity entity : nearbyEntities){
 
-            if(id.equals(entity.getCustomName())){
+            if(entity.customName() != null && id.equals(LegacyComponentSerializer.legacySection().serialize(entity.customName()))){
 
                 if(entity.getType().equals(entityType)){
 

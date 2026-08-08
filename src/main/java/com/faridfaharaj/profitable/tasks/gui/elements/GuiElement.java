@@ -1,16 +1,13 @@
 package com.faridfaharaj.profitable.tasks.gui.elements;
 
-import com.faridfaharaj.profitable.Profitable;
 import com.faridfaharaj.profitable.tasks.gui.ChestGUI;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Material;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
-import java.util.ArrayList;
 import java.util.List;
 
 public class GuiElement {
@@ -46,11 +43,7 @@ public class GuiElement {
     public void setDisplayName(Component text){
 
         ItemMeta metaAccountButton = display.getItemMeta();
-        if(!Profitable.getfolialib().isSpigot()){
-            metaAccountButton.displayName(text);
-        }else {
-            metaAccountButton.setDisplayName(LegacyComponentSerializer.legacySection().serialize(text));
-        }
+        metaAccountButton.displayName(text);
         display.setItemMeta(metaAccountButton);
 
     }
@@ -59,17 +52,7 @@ public class GuiElement {
 
         if(lore != null){
             ItemMeta metaAccountButton = display.getItemMeta();
-
-            if(!Profitable.getfolialib().isSpigot()){
-                metaAccountButton.lore(lore);
-            }else {
-                List<String> loreString = new ArrayList<>();
-                for(Component component : lore){
-                    loreString.add(LegacyComponentSerializer.legacySection().serialize(component));
-                }
-                metaAccountButton.setLore(loreString);
-            }
-
+            metaAccountButton.lore(lore);
             display.setItemMeta(metaAccountButton);
         }
 
