@@ -29,42 +29,39 @@ public final class AssetHolderButton extends GuiElement {
     public AssetHolderButton(ChestGUI gui, AssetCache assetButtonData, int slot) {
         super(gui, new ItemStack(Material.PAPER), Component.text("Loading...", Configuration.COLOREMPTY), null, slot);
 
-        Profitable.getfolialib().getScheduler().runAsync(task -> {
+        this.asset = assetButtonData.getAsset();
+        this.lastestDay = assetButtonData.getlastCandle();
 
-            this.asset = assetButtonData.getAsset();
-            this.lastestDay = assetButtonData.getlastCandle();
+        if(asset.getAssetType() == 2){
+            Material icon = Material.matchMaterial(asset.getCode());
+            this.display = new ItemStack(icon != null && icon.isItem() ? icon : Material.PAPER);
+        }if(asset.getAssetType() == 3){
+            Material icon = Material.matchMaterial(asset.getCode()+"_SPAWN_EGG");
+            this.display = new ItemStack(icon != null && icon.isItem() ? icon : Material.NAME_TAG);
+        }if(asset.getAssetType() == 1) {
+            this.display = new ItemStack(Material.EMERALD);
+            ItemMeta meta = this.display.getItemMeta();
+            meta.setEnchantmentGlintOverride(true);
+            this.display.setItemMeta(meta);
+        }
 
-            if(asset.getAssetType() == 2){
-                this.display = new ItemStack(Material.getMaterial(asset.getCode()));
-            }if(asset.getAssetType() == 3){
-                this.display = new ItemStack(Material.getMaterial(asset.getCode()+"_SPAWN_EGG"));
-            }if(asset.getAssetType() == 1) {
-                this.display = new ItemStack(Material.EMERALD);
-                ItemMeta meta = this.display.getItemMeta();
-                meta.setEnchantmentGlintOverride(true);
-                this.display.setItemMeta(meta);
-            }
+        setDisplayName(Component.text(asset.getCode(),asset.getColor()));
 
-            setDisplayName(Component.text(asset.getCode(),asset.getColor()));
+        List<Component> lore = Profitable.getLang().langToLore("gui.wallet.buttons.asset-holding.lore",
+                Map.entry("%asset_type%", NamingUtil.nameType(asset.getAssetType())),
+                Map.entry("%owned_asset_amount%", MessagingUtil.assetAmmount(asset, lastestDay.getVolume())),
+                Map.entry("%price_asset_amount%", MessagingUtil.assetAmmount(Configuration.MAINCURRENCYASSET, lastestDay.getClose())),
+                Map.entry("%value_asset_amount%", MessagingUtil.assetAmmount(Configuration.MAINCURRENCYASSET, lastestDay.getVolume()*lastestDay.getClose()))
+        );
 
-            List<Component> lore = Profitable.getLang().langToLore("gui.wallet.buttons.asset-holding.lore",
-                    Map.entry("%asset_type%", NamingUtil.nameType(asset.getAssetType())),
-                    Map.entry("%owned_asset_amount%", MessagingUtil.assetAmmount(asset, lastestDay.getVolume())),
-                    Map.entry("%price_asset_amount%", MessagingUtil.assetAmmount(Configuration.MAINCURRENCYASSET, lastestDay.getClose())),
-                    Map.entry("%value_asset_amount%", MessagingUtil.assetAmmount(Configuration.MAINCURRENCYASSET, lastestDay.getVolume()*lastestDay.getClose()))
-            );
+        setLore(lore);
 
-            setLore(lore);
+        loaded = true;
 
-
-            loaded = true;
-
-            this.show(gui);
-
-        });
+        this.show(gui);
     }
 
-    public void manage(Player player, boolean depositing, AssetCache[][] assetCache){
-        new DepositWithdrawalGui(asset, depositing, assetCache).openGui(player);
+    public void manage(Player player, boolean depositing, AssetCache[][] assetCache, boolean fromTrade){
+        new DepositWithdrawalGui(asset, depositing, assetCache, fromTrade).openGui(player);
     }
 }

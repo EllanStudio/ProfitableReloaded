@@ -1,5 +1,11 @@
-# Lang file to be used by the plugin
-language: en
+# Lang file to be used by the plugin. Available: en, zh_cn, zh_TW, es (missing keys fall back to English)
+language: zh_cn
+
+# Optional update checker. Disabled until this fork has a published Modrinth project.
+update-check:
+  enabled: false
+  modrinth-project: ""
+  download-url: "https://github.com/EllanServer/ProfitableReloaded/releases"
 
 # Allows Vault currency be added as an asset, withdrawn or deposited to your account
 vault-support: true
@@ -21,6 +27,12 @@ database:
   # (0)-SQLite (1)-mySQL
   database-type: 0
 
+  pool:
+    # MySQL connections available to concurrent command and GUI queries
+    maximum-size: 10
+    minimum-idle: 2
+    connection-timeout-ms: 10000
+
   mysql:
     host:
     port:
@@ -30,13 +42,21 @@ database:
     options: "?useSSL=true&requireSSL=true&serverTimezone=UTC&allowPublicKeyRetrieval=true"
 
 # Redis configuration for Velocity proxy / multi-server support
-# When enabled, in-memory state (account sessions, trade events) is synchronized
-# across all backend servers via Redis pub/sub.
+# Shared MySQL remains authoritative for orders, balances and candles. Redis carries
+# account-session coordination, asset-cache invalidation and notification events.
 # NOTE: SQLite is a single-file database not suitable for multi-server use.
 #       Switch database-type to 1 (MySQL) when running behind a Velocity proxy.
 redis:
-  # Set to true to enable Redis synchronization
+  # Enables the cross-backend coordination and notification bus.
+  # Redis does not replicate balances, orders, executions or candles.
   enabled: false
+  # When enabled and required, startup fails if Redis is unavailable. A later
+  # disconnect blocks new trades until coordination recovers; cancellation and
+  # durable outbox recovery remain available.
+  required: true
+  # Must be unique and stable for every backend behind Velocity. An active duplicate
+  # is rejected through a Redis lease instead of silently dropping peer events.
+  server-id: "server-1"
   host: localhost
   port: 6379
   # Leave blank if your Redis instance has no password
@@ -45,15 +65,13 @@ redis:
   channel-prefix: "profitable"
   # Maximum number of reconnection attempts before giving up
   reconnect-attempts: 5
-  # Base delay between reconnection attempts in milliseconds (linear backoff)
+  # Base delay for exponential reconnection backoff with jitter, in milliseconds
   reconnect-delay-ms: 2000
-  # Sync order cancellations across servers
-  sync-orders: true
-  # Sync balance changes across servers (higher performance overhead)
-  sync-balances: false
 
 exchange:
   fees: # Fixed: 23    Percentage: 23%
+    # Wallet command amounts are gross: the configured fee is deducted from this
+    # amount, and the destination receives gross minus fee.
     # Fees when you take money from your wallet
     withdrawal-fees: 0
     # Fees when you add money to your wallet
@@ -68,18 +86,6 @@ exchange:
 
       # Fees when you use the claiming tag on an entity (fixed only)
       entity-claiming-fees: 0
-
-    # Commodities spawn on account's delivery location when transacting (commodities are added to wallet when false)
-    physical-delivery: true
-
-    # Allow taking commodities from your wallet for transactions
-    take-wallet: true
-
-    # Allow taking items from your inventory for transactions
-    take-inventory: true
-
-    # Allow taking claimed entities from world for transactions
-    take-world: true
 
     # note: commodities are RAW and FUNGIBLE materials traded in BULK that are then processed into different products
     #       crops and building material can be commodities as well:
@@ -111,7 +117,7 @@ exchange:
         - NETHERITE_SCRAP
         - AMETHYST_SHARD
         - DIAMOND
-        - NETHER_QUARTZ
+        - QUARTZ
         - EMERALD
         - LAPIS_LAZULI
         - GLOWSTONE_DUST

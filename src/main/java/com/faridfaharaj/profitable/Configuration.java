@@ -43,7 +43,11 @@ public class Configuration {
     public static boolean MULTIWORLD;
     public static boolean GENERATEASSETS;
 
-    public static boolean PHYSICALDELIVERY;
+    /** @deprecated Trading is wallet-first in 0.0.1; retained only for binary compatibility. */
+    @Deprecated(forRemoval = true)
+    public static boolean PHYSICALDELIVERY = false;
+    /** @deprecated Trading is wallet-first in 0.0.1; retained only for binary compatibility. */
+    @Deprecated(forRemoval = true)
     public static boolean[] ALLOWEDCOMMODITYCOLLATERAL = new boolean[3];
 
 
@@ -64,13 +68,36 @@ public class Configuration {
 
 
     public static void reloadConfig(Profitable profitable){
+        boolean activeMultiworld = MULTIWORLD;
+
         profitable.reloadConfig();
         loadConfig(profitable);
+
+        // These settings define already-open infrastructure and database keys. Applying
+        // them halfway through a running session would mix incompatible SQL dialects or
+        // world identifiers, so keep the active values until the next full restart.
+        boolean requestedMultiworld = MULTIWORLD;
+        MULTIWORLD = activeMultiworld;
+        if (requestedMultiworld != activeMultiworld) {
+            profitable.getLogger().warning("database.data-per-world changed; restart required before it takes effect");
+        }
+        profitable.warnInfrastructureConfigChanges();
+        try {
+            if (Profitable.getLang() != null) {
+                Profitable.getLang().reload(profitable.getConfig().getString("language", "en"));
+            }
+        } catch (IOException e) {
+            profitable.getLogger().log(Level.SEVERE, "Could not reload language files", e);
+        }
     }
 
     public static void loadConfig(Profitable profitable){
         profitable.saveDefaultConfig();
         FileConfiguration config = profitable.getConfig();
+
+        ALLOWEITEMS.clear();
+        ALLOWENTITIES.clear();
+        HOOKED = false;
 
         MULTIWORLD = config.getBoolean("database.data-per-world");
         GENERATEASSETS = config.getBoolean("exchange.commodities.generation.active");
@@ -173,10 +200,16 @@ public class Configuration {
             }
 
         }
-        PHYSICALDELIVERY = config.getBoolean("exchange.commodities.physical-delivery");
-        ALLOWEDCOMMODITYCOLLATERAL[0] = config.getBoolean("exchange.commodities.take-wallet");
-        ALLOWEDCOMMODITYCOLLATERAL[1] = config.getBoolean("exchange.commodities.take-inventory");
-        ALLOWEDCOMMODITYCOLLATERAL[2] = config.getBoolean("exchange.commodities.take-world");
+        PHYSICALDELIVERY = false;
+        Arrays.fill(ALLOWEDCOMMODITYCOLLATERAL, false);
+        if (config.contains("exchange.commodities.physical-delivery")
+                || config.contains("exchange.commodities.take-wallet")
+                || config.contains("exchange.commodities.take-inventory")
+                || config.contains("exchange.commodities.take-world")) {
+            profitable.getLogger().warning("Legacy physical-delivery/take-* settings are ignored in "
+                    + "ProfitableReloaded 0.0.1. Trades settle to the exchange wallet; use "
+                    + "/wallet deposit and /wallet withdraw.");
+        }
 
         // hooks
         if(VaultHook.inithook(profitable)){
@@ -188,10 +221,17 @@ public class Configuration {
 
         // Colors
         COLORBULLISH = TextColor.fromHexString(config.getString("colors.bullish", "#8CD740"));
+        if (COLORBULLISH == null) {
+            COLORBULLISH = TextColor.color(0x8CD740);
+        }
         COLORBEARISH = TextColor.fromHexString(config.getString("colors.bearish", "#FA413B"));
+        if (COLORBEARISH == null) {
+            COLORBEARISH = TextColor.color(0xFA413B);
+        }
 
         //fees
-        ENTITYCLAIMINGFEES = config.getDouble("exchange.commodities.fees.entity-claiming-fees",0);
+        double entityClaimingFees = config.getDouble("exchange.commodities.fees.entity-claiming-fees",0);
+        ENTITYCLAIMINGFEES = Double.isFinite(entityClaimingFees) && entityClaimingFees >= 0 ? entityClaimingFees : 0;
 
         DEPOSITFEES = getFee(config.getString("exchange.fees.deposit-fees","0"));
         WITHDRAWALFEES = getFee(config.getString("exchange.fees.withdrawal-fees","0"));

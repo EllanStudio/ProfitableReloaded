@@ -18,6 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class AssetDataCache {
 
     private static final long DEFAULT_TTL_MS = 5 * 60 * 1000; // 5 minutes
+    private static final int MAX_ENTRIES = 4096;
 
     private static final Map<String, CachedAsset> cache = new ConcurrentHashMap<>();
 
@@ -50,6 +51,12 @@ public class AssetDataCache {
      */
     public static void put(World world, String assetCode, Asset asset) {
         if (assetCode != null && asset != null) {
+            if (cache.size() >= MAX_ENTRIES) {
+                cache.entrySet().removeIf(entry -> entry.getValue().isExpired());
+                if (cache.size() >= MAX_ENTRIES) {
+                    cache.clear();
+                }
+            }
             cache.put(cacheKey(world, assetCode), new CachedAsset(asset, System.currentTimeMillis()));
         }
     }

@@ -11,8 +11,38 @@ import org.bukkit.command.TabCompleter;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.StringJoiner;
 
 public class HelpCommand implements CommandExecutor {
+
+    private static final String[] ADMIN_HELP_PERMISSIONS = {
+            "profitable.admin.config.reloadconfig",
+            "profitable.admin.info.status",
+            "profitable.admin.accounts.manage.forcelogout",
+            "profitable.admin.accounts.info.getplayeracc",
+            "profitable.admin.accounts.info.wallet",
+            "profitable.admin.accounts.manage.wallet",
+            "profitable.admin.accounts.manage.passwordreset",
+            "profitable.admin.accounts.info.orders",
+            "profitable.admin.accounts.info.claimid",
+            "profitable.admin.accounts.manage.delete",
+            "profitable.admin.outbox.info",
+            "profitable.admin.outbox.retry",
+            "profitable.admin.orders.info.findbyasset",
+            "profitable.admin.orders.manage.cancel",
+            "profitable.admin.orders.manage.delete",
+            "profitable.admin.orders.manage.deleteall",
+            "profitable.admin.orders.manage.cancelall",
+            "profitable.admin.orders.manage.newlimitorder",
+            "profitable.admin.assets.info.getallassets",
+            "profitable.admin.assets.manage.register",
+            "profitable.admin.assets.manage.register",
+            "profitable.admin.assets.manage.register",
+            "profitable.admin.assets.manage.delete",
+            "profitable.admin.assets.manage.newtransaction",
+            "profitable.admin.assets.manage.edit",
+            "profitable.admin.assets.manage.resettransactions"
+    };
 
     String[] pages =
             {
@@ -24,7 +54,7 @@ public class HelpCommand implements CommandExecutor {
 §e Sends a list of commands meant for administrators and ops §r
 -----
 > /sell <Asset> <Units>
-§e Sends an order to sell an asset immediately at the lowest price §r
+§e Sells immediately against the highest available bid §r
 -----
 > /sell <Asset> <Units> <Price>
 §e Sends an order to sell an asset at an specified price §r
@@ -77,20 +107,11 @@ public class HelpCommand implements CommandExecutor {
 > /price <Asset>
 §e Shows the latest price, day change, range and volume of an asset §r
 -----
-> /delivery
-§e Displays delivery locations of your account §r
------
-> /delivery set entity
-§e Lets you select the block where bought entities spawn §r
------
-> /delivery set item
-§e Lets you select the container where bought items go §r
------
 > /claimtag
 §e Sends you a name-tag to mark entities as yours §r
 -----
-> /top TOP
-§e Displays the top 9 best performing assets (Monthly MC time) §r
+> /top GROW
+§e Displays the top 9 growing assets (Monthly MC time) §r
 -----
 > /top HOT
 §e Displays the top 9 assets with more % price movement (Monthly MC time) §r
@@ -101,19 +122,19 @@ public class HelpCommand implements CommandExecutor {
 > /top BIG
 §e Displays the top 9 most expensive assets (Monthly MC time) §r
 -----
-> /assets categories commodity
-§e Displays all assets from type commodity §r
+> /assets
+§e Opens the registered asset browser §r
 -----
-> /assets categories currency
-§e Displays all assets from type currency §r
------
-> /asset <Asset> graph <Time frame>
-§e Gives you a map containing a candles graph showcasing price movements across a certain time frame §r""", """
-> /admin config reload
+> /trade
+§e Opens the complete trading interface §r""", """
+> /admin config reloadconfig
 §e Reloads and updates most config changes §r
 -----
 > /admin status
-§e Shows a summary of the exchange status §r
+§e Shows database, Redis, correlation, execution and wallet-credit outbox health §r
+-----
+> /admin forcelogout <player>
+§e Removes a player's active local account session §r
 -----
 > /admin getplayeracc <player>
 §e shows player's current active account §r
@@ -121,47 +142,44 @@ public class HelpCommand implements CommandExecutor {
 > /admin account <account> wallet
 §e shows account asset balances §r
 -----
-> /admin account <account> wallet <asset> <amount>
-§e allows you to set an account's asset balance to a specific amount §r
+> /admin account <account> wallet <asset> <amount> [request-uuid]
+§e Audited absolute mint/burn. Reuse the UUID when retrying; pending durable credits reject the change, and physical assets require whole units. §r
 -----
-> /admin account <account> passwordreset
-§e turns an account's password into '1234' for recovery §r
+> /admin account <account> passwordreset <new password>
+§e Replaces an account password with a new 8-31 character password §r
 -----
 > /admin account <account> orders
 §e shows all active orders on the account §r
 -----
-> /admin account <account> delivery
-§e shows delivery locations on the account §r
------
-> /admin account <account> delivery setitem <x> <y> <z> <world name>
-§e allows you to set an account's item delivery location §r
------
-> /admin account <account> delivery setentity <x> <y> <z> <world name>
-§e allows you to set an account's entity delivery location §r
------
 > /admin account <account> claimid
 §e shows the nametag name that recognizes someone's owned entities §r
 -----
-> /admin account <account> delete
-§e deletes an account §r
+> /admin account <account> delete <account again>
+§e Deletes an inactive account only after orders, unsettled credits and positive wallet balances are cleared §r
+-----
+> /admin outbox dead
+§e Lists up to 50 DEAD wallet-credit legs with delivery and execution correlation IDs §r
+-----
+> /admin outbox retry <delivery-id>
+§e Safely requeues a DEAD wallet credit; processed-event deduplication remains active §r
 -----
 > /admin orders findbyasset <asset>
 §e shows all orders from a specific asset §r
 -----
 > /admin orders getbyid <ID> cancel
-§e cancels an order, giving collateral back to owner §r
+§e Cancels an order and queues its exact escrow refund to the owner's wallet §r
 -----
 > /admin orders getbyid <ID> delete
-§e deletes an order §r
+§e Compatibility alias for safe cancellation and queued escrow refund §r
 -----
 > /admin orders deleteall
-§e deletes all existing orders §r
+§e Safely cancels all existing orders and queues every escrow refund §r
 -----
 > /admin orders cancelall
-§e cancels all existing orders (warning: may be heavy) §r
+§e Cancels all existing orders and queues wallet refunds (may be heavy) §r
 -----
-> /admin orders newlimitorder <asset> <price> <units>
-§e creates a limit order from thin air (useful for asset's initial supply) §r
+> /admin orders newlimitorder <asset> <buy|sell> <units> <price>
+§e Creates a collateralized order owned by server; the server wallet must fund it §r
 -----
 > /admin assets
 §e shows all registered assets §r
@@ -175,42 +193,44 @@ public class HelpCommand implements CommandExecutor {
 > /admin assets register currency <code>
 §e allows you to create a currency to trade in the exchange §r
 -----
-> /admin assets fromid <asset> delete
+> /admin assets fromid <asset> delete <asset again>
 §e deletes a certain asset (will come back if in config) §r
 -----
-> /admin assets fromid <asset> newtransaction <price> <volume>
-§e fakes transactions to make the illusion of market movement on an asset §r
+> /admin assets fromid <asset> newtransaction <price> <volume> [request-uuid]
+§e Inserts an audited synthetic candle event. Reuse the request UUID when retrying so volume is applied only once. §r
 -----
 > /admin assets fromid <asset> edit <New symbol> <New name> <New Color>
 §e Allows you to edit the appearance and identifier of registered assets §r
 -----
 > /admin assets fromid <asset> resettransactions
-§e deletes all records of transactions from an asset (this kills graphs) §r"""
+§e Legacy compatibility command; safely refuses to erase correlated execution history and changes no data. §r"""
 
             };
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String s, String[] args) {
 
-        int page;
+        Component content;
 
         if(args.length == 1){
 
             if(Objects.equals(args[0], "admin")){
-                page = 1;
+                if (!AdminCommand.hasAnyAdminPermission(sender)) {
+                    MessagingUtil.sendGenericMissingPerm(sender);
+                    return true;
+                }
+                content = getAdminHelp(sender);
             }else{
-                page = 0;
+                content = LegacyComponentSerializer.legacySection().deserialize(pages[0]);
             }
 
         }else{
-            page = 0;
+            content = LegacyComponentSerializer.legacySection().deserialize(pages[0]);
         }
-
-        Component content = LegacyComponentSerializer.legacySection().deserialize(pages[page]);
 
         MessagingUtil.sendComponentMessage(sender,
                 Component.text("========== [ ", Configuration.COLORPROFITABLE)
-                        .append(Component.text("Profitable Help", Configuration.COLORHIGHLIGHT))
+                        .append(Component.text("ProfitableReloaded Help", Configuration.COLORHIGHLIGHT))
                         .append(Component.text(" ] ==========", Configuration.COLORPROFITABLE)).appendNewline()
                         .append(content)
         );
@@ -218,11 +238,28 @@ public class HelpCommand implements CommandExecutor {
         return true;
     }
 
+    private Component getAdminHelp(CommandSender sender) {
+        String[] entries = pages[1].split("\\R-----\\R");
+        StringJoiner visibleEntries = new StringJoiner("\n-----\n");
+
+        for (int i = 0; i < ADMIN_HELP_PERMISSIONS.length && i < entries.length; i++) {
+            if (sender.hasPermission(ADMIN_HELP_PERMISSIONS[i])) {
+                visibleEntries.add(entries[i]);
+            }
+        }
+
+        return LegacyComponentSerializer.legacySection().deserialize(visibleEntries.toString());
+    }
+
     public static class CommandTabCompleter implements TabCompleter {
 
         @Override
         public List<String> onTabComplete(CommandSender sender, Command command, String s, String[] args) {
-            return List.of("admin");
+            if (args.length == 1 && AdminCommand.hasAnyAdminPermission(sender)
+                    && "admin".regionMatches(true, 0, args[0], 0, args[0].length())) {
+                return List.of("admin");
+            }
+            return List.of();
         }
 
     }

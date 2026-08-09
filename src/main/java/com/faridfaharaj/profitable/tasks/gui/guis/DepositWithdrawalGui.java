@@ -21,11 +21,17 @@ public final class DepositWithdrawalGui extends QuantitySelectGui {
     Asset asset;
 
     AssetCache[][] assetCache;
+    boolean fromTrade;
     public DepositWithdrawalGui(Asset asset, boolean depositing, AssetCache[][] assetCache) {
+        this(asset, depositing, assetCache, false);
+    }
+
+    public DepositWithdrawalGui(Asset asset, boolean depositing, AssetCache[][] assetCache, boolean fromTrade) {
         super(Profitable.getLang().get(depositing?"gui.deposit-withdrawal.title-deposit":"gui.deposit-withdrawal.title-withdrawal"), asset.getAssetType() != 2 && asset.getAssetType() != 3, asset.getAssetType() == 2 || asset.getAssetType() == 3, 1);
         this.assetCache = assetCache;
         this.depositing = depositing;
         this.asset = asset;
+        this.fromTrade = fromTrade;
         onAmountUpdate(amount);
     }
 
@@ -69,6 +75,6 @@ public final class DepositWithdrawalGui extends QuantitySelectGui {
 
     @Override
     protected void onReturn(Player player) {
-        new HoldingsMenu(player, assetCache).openGui(player);
+        new HoldingsMenu(player, assetCache, fromTrade).openGui(player);
     }
 }

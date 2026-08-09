@@ -4,6 +4,7 @@ generic:
     missing-perm: "<red>You don't have permission to do that</red>"
     invalid-subcommand: "<red>Invalid subcommand: %sub_command%</red>"
     invalid-amount: "<red>Invalid amount %invalid_amount%</red>"
+    internal: "<red>The operation could not be completed. Please try again or contact an administrator.</red>"
 
 temp-items:
   error:
@@ -11,6 +12,7 @@ temp-items:
 
 orders:
   cancel: "<gray>Cancelled <yellow>%order%</yellow></gray>"
+  refund-queued: "<gray>Durable wallet refund queued: <yellow>%asset_amount%</yellow></gray>"
   cancelall: "<gray>Cancelled <yellow>%amount%</yellow> orders</gray>"
   error:
     no-orders: "<red>You have no active orders</red>"
@@ -27,6 +29,7 @@ orders:
 
 
 account:
+  default-name: "Default"
   display: "<gray>Active account: <yellow>(%account%)</yellow></gray>"
   delete: "<red>DELETED account: %account%</red>"
   login: "<gray>Successfully logged into <yellow>%account%</yellow>!</gray>"
@@ -42,9 +45,21 @@ account:
     cant-delete-active-account: "<red>Someone else is still using this account, cannot delete</red>"
     active-account-mismatch: "<red>Account name doesn't match with active account's</red>"
 
+admin:
+  wallet-adjustment:
+    applied: "<gray>Audited wallet request <yellow>%request_id%</yellow>: set <yellow>%asset%</yellow> on <yellow>%account%</yellow> from <white>%old_amount%</white> to <white>%new_amount%</white>.</gray>"
+    already-applied: "<yellow>Wallet request %request_id% was already applied; this retry made no additional change. The audited target was %account%'s %asset% = %new_amount%.</yellow>"
+    error:
+      account-not-found: "<red>Account %account% was not found; wallet request %request_id% changed nothing.</red>"
+      asset-not-found: "<red>Asset %asset% was not found; wallet request %request_id% changed nothing.</red>"
+      invalid-physical-quantity: "<red>%asset% is physical and must be set to a whole quantity no greater than 2147483647.</red>"
+      pending-delivery: "<red>Cannot set %account%'s %asset% balance while a durable wallet credit is pending, processing, or dead. Resolve the outbox first; request %request_id% changed nothing.</red>"
+      invalid-request-id: "<red>Invalid wallet adjustment request UUID: %request_id%</red>"
+      rejected: "<red>Wallet request %request_id% was rejected; no additional balance change was made.</red>"
+
 
 exchange:
-  fee-display: "<red>(incl. %amount% %asset% fee)</red>"
+  fee-display: "<red>(%amount% %asset% fee)</red>"
   charge-notice: "<gray>Charged %asset_amount% %fee%</gray>"
   payment-notice: "<gray>Received %asset_amount% %fee%</gray>"
   selling-notice: "<gray><green>Bought</green> %base_asset_amount% for %quote_asset_amount%</gray>"
@@ -56,13 +71,17 @@ exchange:
     partial-fill: "<yellow>Partially filled</yellow>"
     partial-fill-low-liquidity: "<yellow>Partially filled because no more orders were available</yellow>"
     fee-higher-than-profit: "<yellow>This order is worth less than its fee (%fee_asset_amount%) there will be no profit!</yellow>"
+    request-already-processed: "<yellow>This order request was already processed; it was not charged again.</yellow>"
   error:
+    settlement-unknown: "<red>Order request <yellow>%request_id%</yellow> could not be confirmed. Do not submit it again blindly; check /orders and /wallet, then give this ID to an administrator.</red>"
+    settlement-committed-notification-failed: "<yellow>Order request %request_id% was committed, but its notification could not be displayed. Do not resubmit it; check /orders and /wallet.</yellow>"
     invalid-order-type: "<red>Invalid Order Type</red>"
     identical-assets: "<red>You must trade between two different assets</red>"
     invalid-sell-stop-trigger: "<red>Stop trigger price must be lower than market's when selling</red>"
     invalid-buy-stop-trigger: "<red>Stop trigger price must be higher than market's when buying</red>"
     cant-self-transact: "<red>You can't transact with yourself!, cancel current order first</red>"
     no-orders-found: "<red>No orders available, use limit order instead!</red>"
+    sync-unavailable: "<red>Cross-server synchronization is unavailable. New trades are temporarily disabled; existing orders can still be cancelled.</red>"
 
 assets:
   amount-display: "%amount% %asset%"
@@ -89,13 +108,15 @@ assets:
     cant-claim-entity: "<red>Owning this entity isn't allowed</red>"
 
 delivery:
+  deprecated: "<yellow>ProfitableReloaded 0.0.1 always settles trades to the exchange wallet. Delivery locations are not used for settlement or withdrawal; use /wallet withdraw.</yellow>"
+  not-set: "Not set"
   display: "<br><gray>Item Delivery Location: <yellow>%i_position%</yellow></gray><br><gray>Entity Delivery Location: <yellow>%e_position%</yellow></gray><br>"
   updated-item: "<gray>Updated item delivery to: <yellow>%position%</yellow></gray>"
   updated-entity: "<gray>Updated entity delivery to: <yellow>%position%</yellow></gray>"
   error:
     items-must-be-container: "<red>Item delivery location must be a container</red>"
-    missing-item-delivery:
-    missing-entity-delivery:
+    missing-item-delivery: "<red>You must set an item delivery location first</red>"
+    missing-entity-delivery: "<red>You must set an entity delivery location first</red>"
 
 price:
   no-data: "<red>No price data available for %asset% yet</red>"
@@ -132,6 +153,20 @@ gui:
         name: "<yellow>Click to multiply by 10</yellow>"
       divide-ten:
         name: "<yellow>Click to divide by 10</yellow>"
+
+  trade:
+    title: "Trade"
+    buttons:
+      balance:
+        loading: "<gray>Loading...</gray>"
+        name: "<green>Balance: %balance%</green>"
+        lore:
+          - "<dark_gray>Account: %account%</dark_gray>"
+          - ""
+          - "<gray>Holdings: %holdings% assets</gray>"
+          - "<gray>Total value: %total_value%</gray>"
+          - ""
+          - "<yellow>Click to view your assets</yellow>"
 
   asset-explorer:
     title: "Asset explorer"

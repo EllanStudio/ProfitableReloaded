@@ -4,6 +4,7 @@ generic:
     missing-perm: "<red>No tienes permiso para hacer eso</red>"
     invalid-subcommand: "<red>Subcomando inválido: %sub_command%</red>"
     invalid-amount: "<red>Cantidad inválida %invalid_amount%</red>"
+    internal: "<red>No se pudo completar la operación. Inténtalo de nuevo o contacta con un administrador.</red>"
 
 temp-items:
   error:
@@ -11,6 +12,7 @@ temp-items:
 
 orders:
   cancel: "<gray>Orden cancelada <yellow>%order%</yellow></gray>"
+  refund-queued: "<gray>Reembolso duradero a la cartera en cola: <yellow>%asset_amount%</yellow></gray>"
   cancelall: "<gray>Se cancelaron <yellow>%amount%</yellow> órdenes</gray>"
   error:
     no-orders: "<red>No tienes órdenes activas</red>"
@@ -25,6 +27,7 @@ orders:
     market-ignores-price: "<yellow>Ignorando el precio para orden de mercado</yellow>"
 
 account:
+  default-name: "Predeterminada"
   display: "<gray>Cuenta activa: <yellow>(%account%)</yellow></gray>"
   delete: "<red>CUENTA ELIMINADA: %account%</red>"
   login: "<gray>Sesión iniciada correctamente en <yellow>%account%</yellow>!</gray>"
@@ -40,8 +43,20 @@ account:
     cant-delete-active-account: "<red>Alguien más está usando esta cuenta, no se puede eliminar</red>"
     active-account-mismatch: "<red>El nombre de la cuenta no coincide con la cuenta activa</red>"
 
+admin:
+  wallet-adjustment:
+    applied: "<gray>Solicitud de cartera auditada <yellow>%request_id%</yellow>: <yellow>%asset%</yellow> de <yellow>%account%</yellow> cambió de <white>%old_amount%</white> a <white>%new_amount%</white>.</gray>"
+    already-applied: "<yellow>La solicitud %request_id% ya fue aplicada; este reintento no realizó otro cambio. El objetivo auditado fue %asset% de %account% = %new_amount%.</yellow>"
+    error:
+      account-not-found: "<red>No se encontró la cuenta %account%; la solicitud %request_id% no cambió nada.</red>"
+      asset-not-found: "<red>No se encontró el activo %asset%; la solicitud %request_id% no cambió nada.</red>"
+      invalid-physical-quantity: "<red>%asset% es físico y debe establecerse en una cantidad entera no mayor que 2147483647.</red>"
+      pending-delivery: "<red>No se puede fijar el saldo %asset% de %account% mientras haya un crédito duradero pendiente, en proceso o muerto. Resuelve el outbox primero; la solicitud %request_id% no cambió nada.</red>"
+      invalid-request-id: "<red>UUID de solicitud de ajuste de cartera inválido: %request_id%</red>"
+      rejected: "<red>La solicitud de cartera %request_id% fue rechazada; no se realizó ningún cambio adicional.</red>"
+
 exchange:
-  fee-display: "<red>(incluye %amount% %asset% de comisión)</red>"
+  fee-display: "<red>(%amount% %asset% de comisión)</red>"
   charge-notice: "<gray>Cobrado %asset_amount% %fee%</gray>"
   payment-notice: "<gray>Recibido %asset_amount% %fee%</gray>"
   selling-notice: "<gray><green>Comprado</green> %base_asset_amount% por %quote_asset_amount%</gray>"
@@ -53,13 +68,17 @@ exchange:
     partial-fill: "<yellow>Tu orden fue parcialmente completada</yellow>"
     partial-fill-low-liquidity: "<yellow>Parcialmente completada porque no hay más órdenes disponibles</yellow>"
     fee-higher-than-profit: "<yellow>¡Esta orden vale menos que su comisión (%fee_asset_amount%), no habrá ganancia!</yellow>"
+    request-already-processed: "<yellow>Esta solicitud de orden ya fue procesada; no se volvió a cobrar.</yellow>"
   error:
+    settlement-unknown: "<red>No se pudo confirmar la solicitud <yellow>%request_id%</yellow>. No la repitas a ciegas; revisa /orders y /wallet y entrega este ID a un administrador.</red>"
+    settlement-committed-notification-failed: "<yellow>La solicitud %request_id% fue confirmada, pero no se pudo mostrar la notificación. No la repitas; revisa /orders y /wallet.</yellow>"
     invalid-order-type: "<red>Tipo de orden inválido</red>"
     identical-assets: "<red>Debes intercambiar entre dos activos diferentes</red>"
     invalid-sell-stop-trigger: "<red>El precio de activación de stop debe ser menor que el del mercado al vender</red>"
     invalid-buy-stop-trigger: "<red>El precio de activación de stop debe ser mayor que el del mercado al comprar</red>"
     cant-self-transact: "<red>¡No puedes hacer transacciones contigo mismo! Cancela la orden actual primero</red>"
     no-orders-found: "<red>No hay órdenes disponibles, ¡usa una orden límite!</red>"
+    sync-unavailable: "<red>La sincronización entre servidores no está disponible. Las nuevas operaciones están temporalmente deshabilitadas; las órdenes existentes aún se pueden cancelar.</red>"
 
 assets:
   amount-display: "%amount% %asset%"
@@ -86,6 +105,8 @@ assets:
     cant-claim-entity: "<red>No está permitido poseer esta entidad</red>"
 
 delivery:
+  deprecated: "<yellow>ProfitableReloaded 0.0.1 siempre liquida las operaciones en la cartera del exchange. Las ubicaciones de entrega no se usan; utiliza /wallet withdraw.</yellow>"
+  not-set: "No establecido"
   display: "<br><gray>Entrega de ítems: <yellow>%i_position%</yellow></gray><br><gray>Entrega de entidades: <yellow>%e_position%</yellow></gray><br>"
   updated-item: "<gray>Entrega de ítems actualizada a: <yellow>%position%</yellow></gray>"
   updated-entity: "<gray>Entrega de entidades actualizada a: <yellow>%position%</yellow></gray>"
@@ -128,6 +149,20 @@ gui:
         name: "<yellow>Haz click para multiplicar por 10</yellow>"
       divide-ten:
         name: "<yellow>Haz click para dividir por 10</yellow>"
+
+  trade:
+    title: "Comercio"
+    buttons:
+      balance:
+        loading: "<gray>Cargando...</gray>"
+        name: "<green>Saldo: %balance%</green>"
+        lore:
+          - "<dark_gray>Cuenta: %account%</dark_gray>"
+          - ""
+          - "<gray>Activos: %holdings%</gray>"
+          - "<gray>Valor total: %total_value%</gray>"
+          - ""
+          - "<yellow>Clic para ver tus activos</yellow>"
 
   asset-explorer:
     title: "Explorador de activos"

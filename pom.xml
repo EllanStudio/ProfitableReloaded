@@ -5,11 +5,11 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.faridfaharaj</groupId>
-    <artifactId>profitable</artifactId>
-    <version>0.5.0-beta</version>
+    <artifactId>profitablereloaded</artifactId>
+    <version>0.0.1</version>
     <packaging>jar</packaging>
 
-    <name>Profitable</name>
+    <name>ProfitableReloaded</name>
 
     <properties>
         <java.version>25</java.version>
@@ -24,8 +24,7 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.15.0</version>
                 <configuration>
-                    <source>${java.version}</source>
-                    <target>${java.version}</target>
+                    <release>${java.version}</release>
                     <compilerArgs>
                         <arg>-Xlint:deprecation</arg>
                     </compilerArgs>
@@ -74,7 +73,15 @@
                             <shadedPattern>com.faridfaharaj.profitable.shaded.hikari</shadedPattern>
                         </relocation>
                     </relocations>
+                    <transformers>
+                        <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                    </transformers>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.5.4</version>
             </plugin>
         </plugins>
         <resources>
@@ -90,7 +97,7 @@
         <id>Testing-package</id>
         <build>
             <directory>${project.basedir}/Testing/plugins</directory>
-            <finalName>Profitable-TESTING-JAR</finalName>
+            <finalName>ProfitableReloaded-TESTING-JAR</finalName>
         </build>
     </profile>
 </profiles>
@@ -118,7 +125,7 @@
         <dependency>
             <groupId>io.papermc.paper</groupId>
             <artifactId>paper-api</artifactId>
-            <version>26.2.build.107-stable</version>
+            <version>26.2.build.111-stable</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
@@ -150,6 +157,36 @@
             <artifactId>HikariCP</artifactId>
             <version>7.1.0</version>
             <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.xerial</groupId>
+            <artifactId>sqlite-jdbc</artifactId>
+            <version>3.53.2.1</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <version>26.7.0</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+            <version>13.2.0</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
+            <version>13.2.0</version>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>6.1.3</version>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>

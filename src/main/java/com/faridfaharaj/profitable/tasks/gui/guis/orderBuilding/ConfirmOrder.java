@@ -27,10 +27,16 @@ public final  class ConfirmOrder extends ChestGUI {
 
     AssetCache[][] assetCache;
     AssetCache assetData;
+    boolean fromTrade;
     public ConfirmOrder(AssetCache[][] assetCache, AssetCache assetData, Order order, List<Order> bidOrders, List<Order> askOrders) {
+        this(assetCache, assetData, order, bidOrders, askOrders, false);
+    }
+
+    public ConfirmOrder(AssetCache[][] assetCache, AssetCache assetData, Order order, List<Order> bidOrders, List<Order> askOrders, boolean fromTrade) {
         super(3, Profitable.getLang().get("gui.order-building.confirmation.title"));
         this.assetCache = assetCache;
         this.assetData = assetData;
+        this.fromTrade = fromTrade;
 
         this.order = order;
         this.bidOrders = bidOrders;
@@ -51,7 +57,7 @@ public final  class ConfirmOrder extends ChestGUI {
 
                 if(button == buttons[0]){
                     player.closeInventory();
-                    new UnitsSelect(assetCache, assetData, order, bidOrders, askOrders).openGui(player);
+                    new UnitsSelect(assetCache, assetData, order, bidOrders, askOrders, fromTrade).openGui(player);
                 }
 
                 if(button == buttons[1]){

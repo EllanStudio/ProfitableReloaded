@@ -5,6 +5,7 @@ import com.faridfaharaj.profitable.Profitable;
 import com.faridfaharaj.profitable.data.DataBase;
 import com.faridfaharaj.profitable.data.holderClasses.Asset;
 import com.faridfaharaj.profitable.data.holderClasses.Order;
+import com.faridfaharaj.profitable.data.settlement.TradeSettlementRepository;
 import com.faridfaharaj.profitable.redis.RedisManager;
 import com.faridfaharaj.profitable.util.MessagingUtil;
 import org.bukkit.Sound;
@@ -13,69 +14,38 @@ import org.bukkit.entity.Player;
 
 import java.io.IOException;
 import java.util.logging.Level;
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.*;
 
 public class Orders {
 
-    public static boolean insertOrder(World world, UUID uuid, String owner, String asset, boolean sideBuy, double price, double units, Order.OrderType orderType) {
-        String sql = "INSERT INTO orders (world, order_uuid, owner, asset_id, sideBuy, price, units, order_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?);";
-
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
-            stmt.setBytes(1, MessagingUtil.getWorldId(world));
-            stmt.setBytes(2, MessagingUtil.UUIDtoBytes(uuid));
-            stmt.setString(3, owner);
-            stmt.setString(4, asset);
-            stmt.setBoolean(5, sideBuy);
-            stmt.setDouble(6, price);
-            stmt.setDouble(7, units);
-            stmt.setDouble(8, orderType.getValue());
-
-            stmt.executeUpdate();
-
-            return true;
-
-        } catch (SQLException e) {
-            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+    /** Places administrative maker liquidity using the same atomic wallet escrow as player orders. */
+    public static TradeSettlementRepository.Result placeOrderFromWallet(
+            World world, UUID uuid, String owner, String asset, boolean sideBuy,
+            double price, double units, Order.OrderType orderType, long marketTime) {
+        if (!Profitable.isTradingReady() || world == null || uuid == null || owner == null || asset == null
+                || orderType == null || !Double.isFinite(price) || price <= 0
+                || !Double.isFinite(units) || units <= 0 || marketTime < 0) {
+            return null;
         }
-
-        return false;
-    }
-
-    public static void updateOrderUnits(World world,UUID uuid, double newUnits) {
-        String sql = "UPDATE orders SET units = ? WHERE world = ? AND order_uuid = ?;";
-
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
-            stmt.setDouble(1, newUnits);
-            stmt.setBytes(2, MessagingUtil.getWorldId(world));
-            stmt.setBytes(3, MessagingUtil.UUIDtoBytes(uuid));
-            stmt.executeUpdate();
-
-        } catch (SQLException e) {
-            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+        Asset assetData = Assets.getAssetData(world, asset);
+        if (assetData == null || ((assetData.getAssetType() == 2 || assetData.getAssetType() == 3)
+                && (units > Integer.MAX_VALUE || units != Math.rint(units)))) {
+            return null;
         }
-    }
-
-    public static void updateStopLimit(World world,double old, double actual) {
-        String sql = "UPDATE orders SET order_type = ? WHERE world = ? AND order_type = ? AND price <= ? AND price >= ?;";
-
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
-            stmt.setInt(1, Order.OrderType.LIMIT.getValue());
-            stmt.setBytes(2, MessagingUtil.getWorldId(world));
-            stmt.setInt(3, Order.OrderType.STOP_LIMIT.getValue());
-            stmt.setDouble(4, Math.max(old,actual));
-            stmt.setDouble(5, Math.min(old,actual));
-            stmt.executeUpdate();
-
+        TradeSettlementRepository.Request request = new TradeSettlementRepository.Request(
+                MessagingUtil.getWorldId(world), uuid, owner, asset,
+                Configuration.MAINCURRENCYASSET.getCode(), sideBuy, price, units, orderType,
+                assetData.getAssetType(), "0", Configuration.ASSETFEES[assetData.getAssetType()][1],
+                marketTime, System.currentTimeMillis());
+        try (Connection connection = DataBase.getConnection()) {
+            return TradeSettlementRepository.place(connection, DataBase.isMySQL(), request);
         } catch (SQLException e) {
-            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "Could not place escrowed order", e);
+            return null;
         }
     }
 
@@ -83,7 +53,8 @@ public class Orders {
         List<Order> orders = new ArrayList<>();
         String sql = "SELECT * WHERE world = ? AND order_type == 2 AND price <= ? AND price >= ?;";
 
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
+        try (Connection connection = DataBase.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setBytes(1, DataBase.getCurrentWorld());
             stmt.setDouble(2, Math.max(old,actual));
             stmt.setDouble(3, Math.min(old,actual));
@@ -112,15 +83,21 @@ public class Orders {
     }*/
 
 
-    public static List<Order> getBestOrders(World world,String asset, boolean sideBuy, double price, double units) {
+    public static List<Order> getBestOrders(World world,String asset, boolean sideBuy, double price, double units, String excludedOwner) {
         List<Order> orders = new ArrayList<>();
-        String sql = "SELECT * FROM orders WHERE world = ? AND asset_id = ? AND sideBuy = ? AND price " + (sideBuy ? "<=" : ">=") + " ? AND order_type = " + Order.OrderType.LIMIT.getValue() + " ORDER BY price " + (sideBuy ? "ASC" : "DESC") + " LIMIT " + Math.ceil(units) +";";
+        if (!(units > 0) || !Double.isFinite(units)) {
+            return orders;
+        }
 
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
+        String sql = "SELECT * FROM orders WHERE world = ? AND asset_id = ? AND sideBuy = ? AND owner <> ? AND price " + (sideBuy ? "<=" : ">=") + " ? AND order_type = " + Order.OrderType.LIMIT.getValue() + " ORDER BY price " + (sideBuy ? "ASC" : "DESC") + ", sequence_id ASC;";
+
+        try (Connection connection = DataBase.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setBytes(1, MessagingUtil.getWorldId(world));
             stmt.setString(2, asset);
             stmt.setBoolean(3, !sideBuy);
-            stmt.setDouble(4, price);
+            stmt.setString(4, excludedOwner);
+            stmt.setDouble(5, price);
 
             try (ResultSet rs = stmt.executeQuery()) {
                 double accumulatedUnits = 0;
@@ -163,7 +140,8 @@ public class Orders {
                 "ORDER BY price " + orderDirection + " " +
                 "LIMIT 7;";
 
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
+        try (Connection connection = DataBase.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setBytes(1, MessagingUtil.getWorldId(world));
             stmt.setString(2, asset);
             stmt.setBoolean(3, isBid);
@@ -193,7 +171,8 @@ public class Orders {
         List<Order> orders = new ArrayList<>();
         String sql = "SELECT * FROM orders WHERE world = ? AND owner = ? ORDER BY asset_id;";
 
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
+        try (Connection connection = DataBase.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setBytes(1, MessagingUtil.getWorldId(world));
             stmt.setString(2, owner);
 
@@ -227,7 +206,8 @@ public class Orders {
         List<Order> orders = new ArrayList<>();
         String sql = "SELECT * FROM orders WHERE world = ? AND asset_id = ?;";
 
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
+        try (Connection connection = DataBase.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setBytes(1, MessagingUtil.getWorldId(world));
             stmt.setString(2, asset);
 
@@ -260,7 +240,8 @@ public class Orders {
     public static Order getOrder(World world,UUID uuid) {
         String sql = "SELECT * FROM orders WHERE world = ? AND order_uuid = ?;";
 
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
+        try (Connection connection = DataBase.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setBytes(1, MessagingUtil.getWorldId(world));
             stmt.setBytes(2, MessagingUtil.UUIDtoBytes(uuid));
 
@@ -296,7 +277,8 @@ public class Orders {
         List<Order> orders = new ArrayList<>();
         String sql = "SELECT * FROM orders WHERE world = ?;";
 
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
+        try (Connection connection = DataBase.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setBytes(1, MessagingUtil.getWorldId(world));
 
             try (ResultSet rs = stmt.executeQuery()) {
@@ -326,7 +308,8 @@ public class Orders {
         List<Order> orders = new ArrayList<>();
         String sql = "SELECT * FROM orders;";
 
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql);
+        try (Connection connection = DataBase.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql);
              ResultSet rs = stmt.executeQuery()) {
 
             while (rs.next()) {
@@ -354,118 +337,105 @@ public class Orders {
         if (orders == null || orders.isEmpty()) {
             return;
         }
-
-        String sql = "DELETE FROM orders WHERE world = ? AND order_uuid = ?;";
-
-        // Batched deletes without manual transaction handling: the shared connection
-        // is used concurrently by async tasks, so toggling autoCommit here could
-        // drag other threads' statements into this transaction.
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
-            for (Order order : orders) {
-                stmt.setBytes(1, MessagingUtil.getWorldId(world));
-                stmt.setBytes(2, MessagingUtil.UUIDtoBytes(order.getUuid()));
-                stmt.addBatch();
-            }
-
-            stmt.executeBatch();
-
-        } catch (SQLException e) {
-            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+        for (Order order : orders) {
+            cancelOrder(world, order.getUuid());
         }
     }
 
     public static boolean deleteOrder(World world,UUID uuid) {
-        String sql = "DELETE FROM orders WHERE world = ? AND order_uuid = ?;";
-
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
-            stmt.setBytes(1, MessagingUtil.getWorldId(world));
-            stmt.setBytes(2, MessagingUtil.UUIDtoBytes(uuid));
-            int rows = stmt.executeUpdate();
-            return rows > 0;
-
-        } catch (SQLException e) {
-            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-
-        return false;
+        // Historical "delete" commands now preserve escrow and use durable refunds.
+        return cancelOrder(world, uuid);
     }
 
     public static boolean deleteAllOrders() {
-        String sql = "DELETE FROM orders;";
-
-        try (Statement stmt = DataBase.getConnection().createStatement()) {
-            int rows = stmt.executeUpdate(sql);
-            return rows > 0;
-        } catch (SQLException e) {
-            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
+        List<OrderKey> keys = new ArrayList<>();
+        try (Connection connection = DataBase.getConnection();
+             PreparedStatement statement = connection.prepareStatement("SELECT world, order_uuid FROM orders");
+             ResultSet result = statement.executeQuery()) {
+            while (result.next()) {
+                keys.add(new OrderKey(result.getBytes("world"),
+                        MessagingUtil.UUIDfromBytes(result.getBytes("order_uuid"))));
+            }
+        } catch (SQLException | IOException error) {
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "Could not list orders for cancellation", error);
+            return false;
         }
-        return false;
+        int cancelled = 0;
+        for (OrderKey key : keys) {
+            if (cancelOrderInternal(key.worldId(), key.orderId(), null).cancelled()) {
+                cancelled++;
+            }
+        }
+        return cancelled > 0;
     }
 
     public static boolean cancelOrder(UUID orderid, Player player){
-        Order order = Orders.getOrder(player.getWorld(), orderid);
-        String account = Accounts.getAccount(player);
+        return cancelOrder(orderid, player, player.getWorld(), Accounts.getAccount(player));
+    }
 
-        if(order == null || !Objects.equals(account, order.getOwner())){
+    public static boolean cancelOrder(UUID orderid, Player player, World world, String account){
+        TradeSettlementRepository.Cancellation cancellation = cancelOrderInternal(
+                MessagingUtil.getWorldId(world), orderid, account);
+        if (!cancellation.cancelled()) {
             return false;
         }
 
-        boolean sideBuy = order.isSideBuy();
+        Order order = new Order(cancellation.orderId(), cancellation.owner(), cancellation.assetId(),
+                cancellation.sideBuy(), cancellation.price(), cancellation.units(), Order.OrderType.LIMIT);
+        Asset refundAsset = cancellation.sideBuy()
+                ? Configuration.MAINCURRENCYASSET : Assets.getAssetData(world, cancellation.assetId());
 
-        Asset tradedAsset = Assets.getAssetData(player.getWorld(), order.getAsset());
-        Asset asset = sideBuy? Configuration.MAINCURRENCYASSET : tradedAsset;
-
-        double ammountToSendBack = sideBuy?
-                order.getPrice() * order.getUnits() + Configuration.parseFee(Configuration.ASSETFEES[tradedAsset.getAssetType()][1], order.getPrice() * order.getUnits())
-                :
-                order.getUnits();
-
-        Asset.distributeAsset(player.getWorld(), account, asset, ammountToSendBack);
-
-        player.playSound(player, Sound.ENTITY_ITEM_BREAK, 1 , 1);
-
-        Orders.deleteOrder(player.getWorld(), order.getUuid());
+        Profitable.getfolialib().getScheduler().runAtEntity(player,
+                task -> player.playSound(player, Sound.ENTITY_ITEM_BREAK, 1, 1));
 
         // Notify other servers about order cancellation
         RedisManager rm = Profitable.getRedisManager();
         if (rm != null && rm.isConnected()) {
-            rm.publishAsync("order_cancelled", player.getWorld().getName() + ":" + order.getUuid());
+            rm.publishAsync("order_cancelled", world.getName() + ":" + order.getUuid());
         }
 
         MessagingUtil.sendComponentMessage(player, Profitable.getLang().get("orders.cancel",
                         Map.entry("%order%", order.toStringSimplified()))
                 );
-        MessagingUtil.sendPaymentNotice(player, ammountToSendBack, 0, asset);
+        if (refundAsset != null) {
+            MessagingUtil.sendComponentMessage(player, Profitable.getLang().get("orders.refund-queued",
+                    Map.entry("%asset_amount%",
+                            MessagingUtil.assetAmmount(refundAsset, cancellation.refundAmount()))));
+        }
 
         return true;
     }
 
     public static boolean cancelOrder(World world, UUID orderid){
-        Order order = Orders.getOrder(world, orderid);
+        return cancelOrderInternal(MessagingUtil.getWorldId(world), orderid, null).cancelled();
+    }
 
-        if(order == null){
-            return false;
+    private static TradeSettlementRepository.Cancellation cancelOrderInternal(
+            byte[] worldId, UUID orderId, String expectedOwner) {
+        try (Connection connection = DataBase.getConnection()) {
+            TradeSettlementRepository.Cancellation cancellation = TradeSettlementRepository.cancel(
+                    connection, DataBase.isMySQL(), worldId, orderId, expectedOwner,
+                    Configuration.MAINCURRENCYASSET.getCode(), System.currentTimeMillis());
+            if (cancellation.cancelled()) {
+                Profitable.wakeDeliveryOutbox();
+            }
+            return cancellation;
+        } catch (SQLException error) {
+            Profitable.getInstance().getLogger().log(Level.SEVERE,
+                    "Could not cancel order with durable refund " + orderId, error);
+            return TradeSettlementRepository.Cancellation.missing(orderId);
+        }
+    }
+
+    private record OrderKey(byte[] worldId, UUID orderId) {
+        private OrderKey {
+            worldId = Arrays.copyOf(worldId, worldId.length);
         }
 
-        boolean sideBuy = order.isSideBuy();
-
-        Asset tradedAsset = Assets.getAssetData(world, order.getAsset());
-        Asset asset = sideBuy? Configuration.MAINCURRENCYASSET : tradedAsset;
-
-        double ammountToSendBack = sideBuy?
-                order.getPrice() * order.getUnits() + Configuration.parseFee(Configuration.ASSETFEES[tradedAsset.getAssetType()][1], order.getPrice() * order.getUnits())
-                :
-                order.getUnits();
-
-        Asset.distributeAsset(world, order.getOwner(), asset, ammountToSendBack);
-
-        Orders.deleteOrder(world, order.getUuid());
-
-        return true;
+        @Override
+        public byte[] worldId() {
+            return Arrays.copyOf(worldId, worldId.length);
+        }
     }
 
 }

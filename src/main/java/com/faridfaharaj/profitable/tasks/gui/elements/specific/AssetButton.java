@@ -2,6 +2,7 @@ package com.faridfaharaj.profitable.tasks.gui.elements.specific;
 
 import com.faridfaharaj.profitable.Configuration;
 import com.faridfaharaj.profitable.Profitable;
+import com.faridfaharaj.profitable.data.holderClasses.Order;
 import com.faridfaharaj.profitable.data.tables.Orders;
 import com.faridfaharaj.profitable.tasks.gui.ChestGUI;
 import com.faridfaharaj.profitable.tasks.gui.elements.GuiElement;
@@ -11,6 +12,7 @@ import com.faridfaharaj.profitable.util.MessagingUtil;
 import com.faridfaharaj.profitable.util.NamingUtil;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Material;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.inventory.ItemStack;
@@ -37,9 +39,11 @@ public final class AssetButton extends GuiElement {
         String symbol = assetData.getAsset().getAssetType() == 1? Configuration.MAINCURRENCYASSET.getCode() + "/" + assetData.getAsset().getCode():assetData.getAsset().getCode();
 
         if(assetData.getAsset().getAssetType() == 2){
-            this.display = new ItemStack(Material.getMaterial(assetData.getAsset().getCode()));
+            Material icon = Material.matchMaterial(assetData.getAsset().getCode());
+            this.display = new ItemStack(icon != null && icon.isItem() ? icon : Material.PAPER);
         }if(assetData.getAsset().getAssetType() == 3){
-            this.display = new ItemStack(Material.getMaterial(assetData.getAsset().getCode()+"_SPAWN_EGG"));
+            Material icon = Material.matchMaterial(assetData.getAsset().getCode()+"_SPAWN_EGG");
+            this.display = new ItemStack(icon != null && icon.isItem() ? icon : Material.NAME_TAG);
         }if(assetData.getAsset().getAssetType() == 1) {
             this.display = new ItemStack(Material.EMERALD);
             ItemMeta meta = this.display.getItemMeta();
@@ -52,7 +56,7 @@ public final class AssetButton extends GuiElement {
                         Map.entry("%asset%", "<color:"+assetData.getAsset().getColor().asHexString() + ">" + symbol + "</color>"),
                         Map.entry("%price%", MessagingUtil.formatNumber(price)),
                         Map.entry("%price_change%", "<color:"+ (change<0?Configuration.COLORBEARISH:Configuration.COLORBULLISH).asHexString() + ">"+ MessagingUtil.formatNumber(change) + "</color>"),
-                        Map.entry("%percentage_change%", "<color:"+ (change<0?Configuration.COLORBEARISH:Configuration.COLORBULLISH).asHexString() + ">"+ MessagingUtil.formatNumber(Math.ceil(change/assetData.getlastCandle().getOpen()*10000)/100) + "%</color>")
+                         Map.entry("%percentage_change%", "<color:"+ (change<0?Configuration.COLORBEARISH:Configuration.COLORBULLISH).asHexString() + ">"+ MessagingUtil.formatNumber(open == 0 ? 0 : Math.ceil(change/open*10000)/100) + "%</color>")
 
                 )
         );
@@ -77,16 +81,24 @@ public final class AssetButton extends GuiElement {
     public void trade(Player player, AssetCache[][] cache){
         if(loaded){
             player.closeInventory();
+            World world = player.getWorld();
             Profitable.getfolialib().getScheduler().runAsync(task -> {
-                new BuySellGui(cache, cache[index[0]][index[1]], Orders.getBidAsk(player.getWorld(), cache[index[0]][index[1]].getAsset().getCode(), true), Orders.getBidAsk(player.getWorld(), cache[index[0]][index[1]].getAsset().getCode(), false)).openGui(player);
+                List<Order> bids = Orders.getBidAsk(world, cache[index[0]][index[1]].getAsset().getCode(), true);
+                List<Order> asks = Orders.getBidAsk(world, cache[index[0]][index[1]].getAsset().getCode(), false);
+                Profitable.getfolialib().getScheduler().runAtEntity(player, entityTask ->
+                        new BuySellGui(cache, cache[index[0]][index[1]], bids, asks).openGui(player));
             });
         }
     }
 
     public void graphs(Player player, AssetCache[][] cache){
         if(loaded){
+            if (!player.hasPermission("profitable.asset.graphs")) {
+                MessagingUtil.sendGenericMissingPerm(player);
+                return;
+            }
             player.closeInventory();
-            new GraphsMenu(cache[index[0]][index[1]].getAsset().getCode(), cache).openGui(player);
+            new GraphsMenu(cache[index[0]][index[1]].getAsset().getCode(), cache, false, index[0]).openGui(player);
         }
     }
 }

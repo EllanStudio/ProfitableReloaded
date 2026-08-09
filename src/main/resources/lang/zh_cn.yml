@@ -1,0 +1,408 @@
+generic:
+  error:
+    cant-console: "<red>无法从控制台使用此命令</red>"
+    missing-perm: "<red>您没有权限执行此操作</red>"
+    invalid-subcommand: "<red>无效子命令: %sub_command%</red>"
+    invalid-amount: "<red>无效数量 %invalid_amount%</red>"
+    internal: "<red>操作未能完成，请稍后重试；若问题持续，请联系管理员。</red>"
+
+temp-items:
+  error:
+    main-hand-occupied: "<red>主手必须为空</red>"
+
+orders:
+  cancel: "<gray>已取消 <yellow>%order%</yellow></gray>"
+  refund-queued: "<gray>持久化钱包退款已排队：<yellow>%asset_amount%</yellow></gray>"
+  cancelall: "<gray>已取消 <yellow>%amount%</yellow> 个订单</gray>"
+  error:
+    no-orders: "<red>您没有活跃的订单</red>"
+  order-types:
+    limit-order: "限价"
+    market-order: "市价"
+    stop-limit-order: "止损"
+  sides:
+    buy: "买单"
+    sell: "卖单"
+  warning:
+    market-ignores-price: "<yellow>市价单将忽略价格</yellow>"
+
+
+
+account:
+  default-name: "默认账户"
+  display: "<gray>当前账户: <yellow>(%account%)</yellow></gray>"
+  delete: "<red>已删除账户: %account%</red>"
+  login: "<gray>已成功登录 <yellow>%account%</yellow>!</gray>"
+  registry: "<gray>账户 <yellow>%account%</yellow> 注册成功!</gray>"
+  logout: "<gray>已成功退出登录!</gray>"
+  password-update: "<gray>密码更新成功!</gray>"
+  error:
+    account-already-exists: "<red>已存在同名账户</red>"
+    password-too-long: "<red>密码最大长度为 32 个字符</red>"
+    password-mismatch: "<red>两次输入的密码不一致</red>"
+    cant-delete-default: "<red>无法删除默认账户</red>"
+    wrong-password: "<red>密码或账户不正确</red>"
+    cant-delete-active-account: "<red>该账户仍在使用中，无法删除</red>"
+    active-account-mismatch: "<red>账户名与当前活跃账户不匹配</red>"
+
+admin:
+  wallet-adjustment:
+    applied: "<gray>已审计钱包请求 <yellow>%request_id%</yellow>：将 <yellow>%account%</yellow> 的 <yellow>%asset%</yellow> 从 <white>%old_amount%</white> 设为 <white>%new_amount%</white>。</gray>"
+    already-applied: "<yellow>钱包请求 %request_id% 已处理；本次重试未重复修改。原审计目标为 %account% 的 %asset% = %new_amount%。</yellow>"
+    error:
+      account-not-found: "<red>未找到账户 %account%；钱包请求 %request_id% 未修改任何余额。</red>"
+      asset-not-found: "<red>未找到资产 %asset%；钱包请求 %request_id% 未修改任何余额。</red>"
+      invalid-physical-quantity: "<red>%asset% 是物理资产，数量必须是整数且不大于 2147483647。</red>"
+      pending-delivery: "<red>%account% 的 %asset% 仍有待处理、处理中或 DEAD 的持久化钱包入账，不能执行绝对设置。请先处理 outbox；请求 %request_id% 未修改余额。</red>"
+      invalid-request-id: "<red>钱包调整请求 UUID 无效：%request_id%</red>"
+      rejected: "<red>钱包请求 %request_id% 被拒绝；未产生额外余额变化。</red>"
+
+
+exchange:
+  fee-display: "<red>(手续费 %amount% %asset%)</red>"
+  charge-notice: "<gray>已收取 %asset_amount% %fee%</gray>"
+  payment-notice: "<gray>已收到 %asset_amount% %fee%</gray>"
+  selling-notice: "<gray><green>已买入</green> %base_asset_amount%，花费 %quote_asset_amount%</gray>"
+  buying-notice: "<gray><red>已卖出</red> %base_asset_amount%，获得 %quote_asset_amount%</gray>"
+  new-order-notice: "<gray>新%order_type%%side% %base_asset_amount%，单价 %quote_asset_amount%</gray>"
+  loading-order: "<gray>正在处理订单...</gray>"
+  claim-fee-notice: "每个实体的认领费用为 %fee_asset_amount%"
+  warning:
+    partial-fill: "<yellow>部分成交</yellow>"
+    partial-fill-low-liquidity: "<yellow>部分成交：没有更多可用订单</yellow>"
+    fee-higher-than-profit: "<yellow>此订单价值低于其手续费（%fee_asset_amount%），将无利可图!</yellow>"
+    request-already-processed: "<yellow>此订单请求已处理，不会重复扣款。</yellow>"
+  error:
+    settlement-unknown: "<red>无法确认订单请求 <yellow>%request_id%</yellow> 的结果。请勿盲目重复提交；先检查 /orders 与 /wallet，并将此 ID 提供给管理员。</red>"
+    settlement-committed-notification-failed: "<yellow>订单请求 %request_id% 已提交，但通知显示失败。请勿重复提交；请检查 /orders 与 /wallet。</yellow>"
+    invalid-order-type: "<red>无效的订单类型</red>"
+    identical-assets: "<red>必须在两种不同资产之间交易</red>"
+    invalid-sell-stop-trigger: "<red>卖出时止损触发价必须低于市场价</red>"
+    invalid-buy-stop-trigger: "<red>买入时止损触发价必须高于市场价</red>"
+    cant-self-transact: "<red>您不能与自己交易！请先取消当前订单</red>"
+    no-orders-found: "<red>没有可用订单，请改用限价单!</red>"
+    sync-unavailable: "<red>跨服同步当前不可用，已暂时禁止新交易；现有订单仍可取消。</red>"
+
+assets:
+  amount-display: "%amount% %asset%"
+  auto-deposit-notice: "已自动存入 %asset_amount% <red>(+ 手续费)</red>"
+  entity-claim-notice: "已使用 %asset_amount% 认领 %entity%"
+  loading-graph: "正在加载图表..."
+  categories:
+    forex: "外汇"
+    commodity: "商品"
+    commodity-item: "商品（物品）"
+    commodity-entity: "商品（实体）"
+  asset-types:
+    currency: "货币"
+    commodity: "商品"
+    commodity-item: "商品（物品）"
+    commodity-entity: "商品（实体）"
+  error:
+    asset-not-found: "<red>无法在此交易 %asset%</red>"
+    cant-fractional: "<red>资产 %asset% 不支持小数</red>"
+    minimum-deposit: "<red>存入金额不能少于 %asset_amount%</red>"
+    not-depositable: "<red>无法存入或取出 %asset%</red>"
+    not-enough-asset: "<red>%asset% 数量不足</red>"
+    cant-reclaim-entity: "<red>无法认领已拥有的实体</red>"
+    cant-claim-entity: "<red>不允许拥有此实体</red>"
+
+delivery:
+  deprecated: "<yellow>ProfitableReloaded 0.0.1 的成交始终结算到交易钱包；交货地点当前不参与结算或提现。请使用 /wallet withdraw。</yellow>"
+  not-set: "未设置"
+  display: "<br><gray>物品收货位置: <yellow>%i_position%</yellow></gray><br><gray>实体收货位置: <yellow>%e_position%</yellow></gray><br>"
+  updated-item: "<gray>物品收货位置已更新为: <yellow>%position%</yellow></gray>"
+  updated-entity: "<gray>实体收货位置已更新为: <yellow>%position%</yellow></gray>"
+  error:
+    items-must-be-container: "<red>物品收货位置必须是容器</red>"
+    missing-item-delivery: "<red>您必须先设置物品收货位置</red>"
+    missing-entity-delivery: "<red>您必须先设置实体收货位置</red>"
+
+price:
+  no-data: "<red>%asset% 暂无价格数据</red>"
+  error:
+    main-currency: "<red>%asset% 是主货币，无法交易</red>"
+
+hooks:
+  error:
+    insufficient-funds: "资金不足"
+
+
+gui:
+  generic:
+    buttons:
+      return:
+        name: "<red>返回</red>"
+        lore:
+          - ""
+          - "<yellow>点击返回上一菜单</yellow>"
+      page-selector:
+        name: "第 %page%/%pages% 页"
+        lore:
+          - ""
+          - "<yellow>左键点击下一页</yellow>"
+          - "<yellow>右键点击上一页</yellow>"
+
+  number-selector:
+    buttons:
+      add:
+        name: "<yellow>增加 %number%</yellow>"
+      subtract:
+        name: "<yellow>减少 %number%</yellow>"
+      times-ten:
+        name: "<yellow>点击乘以 10</yellow>"
+      divide-ten:
+        name: "<yellow>点击除以 10</yellow>"
+
+  trade:
+    title: "交易"
+    buttons:
+      balance:
+        loading: "<gray>加载中...</gray>"
+        name: "<green>余额: %balance%</green>"
+        lore:
+          - "<dark_gray>账户: %account%</dark_gray>"
+          - ""
+          - "<gray>持仓资产: %holdings% 个</gray>"
+          - "<gray>总价值: %total_value%</gray>"
+          - ""
+          - "<yellow>点击查看你的资产</yellow>"
+
+  asset-explorer:
+    title: "资产浏览器"
+    buttons:
+      asset:
+        name: "<white>%asset%  $%price%  %price_change% %percentage_change%</white>"
+        lore:
+          - "<dark_gray>%asset_category%</dark_gray>"
+          - ""
+          - "<gray>%asset_name%</gray>"
+          - "<dark_gray> - </dark_gray><gray>成交量: </gray><white>%volume%</white>"
+          - "<dark_gray> - </dark_gray><gray>开盘价: </gray><white>$%open_price%</white>"
+          - "<dark_gray> - </dark_gray><gray>日内区间: </gray><white>$%range_low% 至 $%range_high%</white>"
+          - ""
+          - "<yellow>左键点击交易</yellow>"
+          - "<yellow>右键点击查看图表</yellow>"
+      category-selector:
+        name: "分类"
+        lore:
+          - "<dark_gray>资产</dark_gray>"
+          - ""
+          - "%category_list%"
+          - ""
+          - "<yellow>点击切换</yellow>"
+      orders:
+        name: "管理订单"
+        lore:
+          - "<dark_gray>订单</dark_gray>"
+          - ""
+          - "<yellow>点击查看您的订单</yellow>"
+      wallet:
+        name: "管理拥有的资产"
+        lore:
+          - "<dark_gray>资产组合</dark_gray>"
+          - ""
+          - "<yellow>点击查看您的资产</yellow>"
+      delivery:
+        name: "设置收货位置"
+        lore:
+          - "<dark_gray>收货</dark_gray>"
+          - ""
+          - "<yellow>左键点击设置物品收货</yellow>"
+          - "<yellow>右键点击设置实体收货</yellow>"
+  graphs:
+    title: "正在显示 %asset% 的图表"
+    buttons:
+      one-month:
+        name: "1 个月"
+        lore:
+          - "<dark_gray>%asset%</dark_gray>"
+          - ""
+          - "<yellow>右键点击查看图表</yellow>"
+      three-months:
+        name: "3 个月"
+        lore:
+          - "<dark_gray>%asset%</dark_gray>"
+          - ""
+          - "<yellow>右键点击查看图表</yellow>"
+      six-months:
+        name: "6 个月"
+        lore:
+          - "<dark_gray>%asset%</dark_gray>"
+          - ""
+          - "<yellow>右键点击查看图表</yellow>"
+      one-year:
+        name: "1 年"
+        lore:
+          - "<dark_gray>%asset%</dark_gray>"
+          - ""
+          - "<yellow>右键点击查看图表</yellow>"
+      two-years:
+        name: "2 年"
+        lore:
+          - "<dark_gray>%asset%</dark_gray>"
+          - ""
+          - "<yellow>右键点击查看图表</yellow>"
+  wallet:
+    title: "资产组合"
+    buttons:
+      asset-holding:
+        lore:
+          - "<dark_gray>%asset_type%</dark_gray>"
+          - ""
+          - "<gray>持有: %owned_asset_amount%</gray>"
+          - ""
+          - "<gray>市场价格: %price_asset_amount%</gray>"
+          - "<gray>总价值: %value_asset_amount%</gray>"
+          - ""
+          - "<yellow>左键点击取出</yellow>"
+          - "<yellow>右键点击存入</yellow>"
+  orders:
+    title: "您的活跃订单"
+    buttons:
+      order:
+        lore:
+          - "<dark_gray>%asset%</dark_gray>"
+          - ""
+          - "<gray>类型: %order_type%</gray>"
+          - ""
+          - "<gray>数量: <white>%base_asset_amount%</white></gray>"
+          - "<gray>价格: %quote_asset_amount%</gray>"
+          - ""
+          - "<gray>总价值: %value_asset_amount%</gray>"
+          - ""
+          - "<yellow>左键点击取消</yellow>"
+
+  deposit-withdrawal:
+    title-deposit: "选择要存入的金额。"
+    title-withdrawal: "选择要取出的金额。"
+    buttons:
+      submit-deposit:
+        name: "金额: <yellow>%amount% %asset%</yellow>"
+        lore:
+          - "<dark_gray>%asset%</dark_gray>"
+          - ""
+          - "<yellow>左键点击继续</yellow>"
+      submit-withdrawal:
+        name: "<yellow>金额: %amount% %asset%</yellow>"
+        lore:
+          - "<dark_gray>%asset%</dark_gray>"
+          - ""
+          - "<yellow>左键点击继续</yellow>"
+
+  order-building:
+    buy-sell:
+      title: "选择方向。"
+      buttons:
+        sell:
+          name: "%side% 订单"
+          lore:
+            - "<dark_gray>%asset%</dark_gray>"
+            - ""
+            - "<gray>卖价: %ask_asset_amount%</gray>"
+            - ""
+            - "<gray>最低价格:</gray>"
+            - "%price_list%"
+            - ""
+            - "<yellow>左键点击选择卖出</yellow>"
+          no-orders-lore:
+            - "<dark_gray>%asset%</dark_gray>"
+            - ""
+            - "<gray>还没有人出售此资产!</gray>"
+            - ""
+            - "<yellow>左键点击选择卖出</yellow>"
+        buy:
+          name: "%side% 订单"
+          lore:
+            - "<dark_gray>%asset%</dark_gray>"
+            - ""
+            - "<gray>买价: %bid_asset_amount%</gray>"
+            - ""
+            - "<gray>最高价格:</gray>"
+            - "%price_list%"
+            - ""
+            - "<yellow>左键点击选择买入</yellow>"
+          no-orders-lore:
+            - "<dark_gray>%asset%</dark_gray>"
+            - ""
+            - "<gray>还没有人购买此资产!</gray>"
+            - ""
+            - "<yellow>左键点击选择买入</yellow>"
+
+    type-select:
+      title: "选择订单类型。"
+      buttons:
+        market:
+          name: "市价单"
+          lore:
+            - "<dark_gray>%asset%</dark_gray>"
+            - ""
+            - "<gray><yellow>立即</yellow>以最佳</gray>"
+            - "<gray>可用价格成交</gray>"
+            - ""
+            - "<yellow>点击选择市价</yellow>"
+          lore-no-orders:
+            - "<dark_gray>%asset%</dark_gray>"
+            - ""
+            - "<gray><yellow>立即</yellow>以最佳</gray>"
+            - "<gray>可用价格成交</gray>"
+            - ""
+            - "<red>没有可用订单!</red>"
+        limit:
+          name: "限价单"
+          lore:
+            - "<dark_gray>%asset%</dark_gray>"
+            - ""
+            - "<gray>选择<yellow>价格</yellow></gray>"
+            - "<gray>匹配到对手单后</gray>"
+            - "<gray>即可成交</gray>"
+            - ""
+            - "<yellow>点击选择限价</yellow>"
+        stop-limit:
+          name: "止损限价单"
+          lore:
+            - "<dark_gray>%asset%</dark_gray>"
+            - ""
+            - "<gray>价格触及</gray>"
+            - "<gray>触发价后</gray>"
+            - "<gray>自动挂出<yellow>限价单</yellow></gray>"
+            - ""
+            - "<yellow>点击选择止损限价</yellow>"
+
+    price-select:
+      title: "选择价格。"
+      buttons:
+        submit:
+          name: "您的价格: <yellow>%amount% %asset%</yellow>"
+          lore:
+            - "<dark_gray>%asset%</dark_gray>"
+            - ""
+            - "<gray>当前资产价格: %price_asset_amount%</gray>"
+            - ""
+            - "<yellow>点击以此价格继续</yellow>"
+    units-select:
+      title: "选择数量。"
+      buttons:
+        submit:
+          name: "交易数量: <yellow>%amount% %asset%</yellow>"
+          lore:
+            - "<dark_gray>%asset%</dark_gray>"
+            - ""
+            - "<gray>总价值: %value_asset_amount%</gray>"
+            - ""
+            - "<yellow>点击以此数量继续</yellow>"
+    confirmation:
+      title: "确认？"
+      buttons:
+        submit:
+          lore:
+            - "<dark_gray>%asset%</dark_gray>"
+            - ""
+            - "<gray>类型: %order_type%</gray>"
+            - ""
+            - "<gray>数量: <white>%base_asset_amount%</white></gray>"
+            - "<gray>价格: %quote_asset_amount%</gray>"
+            - ""
+            - "<gray>总价值: %value_asset_amount%</gray>"
+            - ""
+            - "<yellow>左键点击提交订单</yellow>"

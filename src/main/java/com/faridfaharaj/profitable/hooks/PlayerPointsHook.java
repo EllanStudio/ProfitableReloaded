@@ -19,13 +19,14 @@ public class PlayerPointsHook {
     }
 
     public static boolean initHook(Profitable profitable){
+        api = null;
+        ASSET = null;
+        isConnected = false;
         if(profitable.getConfig().getBoolean("player-points-support")){
             if (Bukkit.getPluginManager().isPluginEnabled("PlayerPoints")) {
                 api = PlayerPoints.getInstance().getAPI();
                 isConnected = api != null;
             }
-        }else {
-            isConnected = false;
         }
 
         if(isConnected) {

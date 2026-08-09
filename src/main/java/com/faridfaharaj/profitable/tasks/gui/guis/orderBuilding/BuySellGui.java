@@ -10,6 +10,7 @@ import com.faridfaharaj.profitable.tasks.gui.elements.GuiElement;
 import com.faridfaharaj.profitable.tasks.gui.elements.ReturnButton;
 import com.faridfaharaj.profitable.tasks.gui.elements.specific.AssetCache;
 import com.faridfaharaj.profitable.tasks.gui.guis.AssetExplorer;
+import com.faridfaharaj.profitable.tasks.gui.guis.TradeGui;
 import com.faridfaharaj.profitable.util.MessagingUtil;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Material;
@@ -30,11 +31,17 @@ public final class BuySellGui extends ChestGUI {
 
     AssetCache[][] assetCache;
     AssetCache assetData;
+    boolean fromTrade;
     public BuySellGui(AssetCache[][] assetCache, AssetCache assetData, List<Order> bidOrders, List<Order> askOrders) {
+        this(assetCache, assetData, bidOrders, askOrders, false);
+    }
+
+    public BuySellGui(AssetCache[][] assetCache, AssetCache assetData, List<Order> bidOrders, List<Order> askOrders, boolean fromTrade) {
         super(3, Profitable.getLang().get("gui.order-building.buy-sell.title"));
 
         this.assetCache = assetCache;
         this.assetData = assetData;
+        this.fromTrade = fromTrade;
 
         this.bidOrders = bidOrders;
         this.askOrders = askOrders;
@@ -115,17 +122,21 @@ public final class BuySellGui extends ChestGUI {
 
                 if(button == buttons[0]){
                     player.closeInventory();
-                    new AssetExplorer(player, assetData.getAsset().getAssetType(), assetCache).openGui(player);
+                    if(fromTrade){
+                        new TradeGui(player, assetData.getAsset().getAssetType(), assetCache).openGui(player);
+                    }else {
+                        new AssetExplorer(player, assetData.getAsset().getAssetType(), assetCache).openGui(player);
+                    }
                 }
 
                 if(button == buttons[1]){
                     player.closeInventory();
-                    new OrderTypeGui(assetCache, assetData, new Order(null, null, assetData.getAsset().getCode(), false, 0, 0, null), bidOrders, askOrders).openGui(player);
+                    new OrderTypeGui(assetCache, assetData, new Order(null, null, assetData.getAsset().getCode(), false, 0, 0, null), bidOrders, askOrders, fromTrade).openGui(player);
                 }
 
                 if(button == buttons[2]){
                     player.closeInventory();
-                    new OrderTypeGui(assetCache, assetData, new Order(null, null, assetData.getAsset().getCode(), true, 0, 0, null), bidOrders, askOrders).openGui(player);
+                    new OrderTypeGui(assetCache, assetData, new Order(null, null, assetData.getAsset().getCode(), true, 0, 0, null), bidOrders, askOrders, fromTrade).openGui(player);
                 }
 
             }

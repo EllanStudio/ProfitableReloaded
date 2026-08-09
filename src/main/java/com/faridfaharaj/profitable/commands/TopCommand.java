@@ -29,7 +29,7 @@ public class TopCommand  implements CommandExecutor {
                 return true;
             }
 
-            if(args.length == 0 || args[0].equals("HOT")){
+            if(args.length == 0 || args[0].equalsIgnoreCase("HOT")){
 
                 Profitable.getfolialib().getScheduler().runAsync(task -> {
                     Component assetsComponent = Candles.getHotAssets(player.getWorld(), 0);
@@ -40,7 +40,7 @@ public class TopCommand  implements CommandExecutor {
                     );
                 });
 
-            }else if(args[0].equals("LIQUID")){
+            }else if(args[0].equalsIgnoreCase("LIQUID")){
                 Profitable.getfolialib().getScheduler().runAsync(task -> {
                     Component assetsComponent = Candles.getHotAssets(player.getWorld(), 2);
                     MessagingUtil.sendComponentMessage(player,
@@ -50,7 +50,7 @@ public class TopCommand  implements CommandExecutor {
                     );
                 });
 
-            }else if(args[0].equals("GROW")){
+            }else if(args[0].equalsIgnoreCase("GROW")){
                 Profitable.getfolialib().getScheduler().runAsync(task -> {
                     Component assetsComponent = Candles.getHotAssets(player.getWorld(), 1);
                     MessagingUtil.sendComponentMessage(player,
@@ -60,7 +60,7 @@ public class TopCommand  implements CommandExecutor {
                     );
                 });
 
-            }else if(args[0].equals("BIG")){
+            }else if(args[0].equalsIgnoreCase("BIG")){
                 Profitable.getfolialib().getScheduler().runAsync(task -> {
                     Component assetsComponent = Candles.getHotAssets(player.getWorld(), 3);
                     MessagingUtil.sendComponentMessage(player,

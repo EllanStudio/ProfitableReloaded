@@ -11,6 +11,7 @@ import com.faridfaharaj.profitable.util.NamingUtil;
 import net.kyori.adventure.text.Component;
 import org.bukkit.World;
 
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.util.logging.Level;
 import java.sql.ResultSet;
@@ -21,10 +22,55 @@ import java.util.Objects;
 
 public class AccountHoldings {
 
-    public static boolean setHolding(World world, String account, String asset, double quantity) {
-        String sql = "INSERT INTO account_assets (world , account_name, asset_id, quantity) VALUES (?, ?, ?, ?) " + (Profitable.getInstance().getConfig().getInt("database.database-type") == 0? "ON CONFLICT(world, account_name, asset_id) DO UPDATE SET quantity = excluded.quantity;" : "ON DUPLICATE KEY UPDATE quantity = VALUES(quantity);");
+    public static boolean addHolding(World world, String account, String asset, double amount) {
+        if (!Double.isFinite(amount) || amount <= 0 || !isValidAssetQuantity(world, asset, amount)) {
+            return false;
+        }
+        String sql = "INSERT INTO account_assets (world, account_name, asset_id, quantity) VALUES (?, ?, ?, ?) "
+                + (DataBase.isMySQL()
+                ? "ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity)"
+                : "ON CONFLICT(world, account_name, asset_id) DO UPDATE SET quantity = quantity + excluded.quantity");
+        try (Connection connection = DataBase.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setBytes(1, MessagingUtil.getWorldId(world));
+            stmt.setString(2, account);
+            stmt.setString(3, asset);
+            stmt.setDouble(4, amount);
+            return stmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "Could not credit account holding", e);
+            return false;
+        }
+    }
 
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
+    public static boolean takeHolding(World world, String account, String asset, double amount) {
+        if (!Double.isFinite(amount) || amount <= 0 || !isValidAssetQuantity(world, asset, amount)) {
+            return false;
+        }
+        String sql = "UPDATE account_assets SET quantity = quantity - ? "
+                + "WHERE world = ? AND account_name = ? AND asset_id = ? AND quantity >= ?";
+        try (Connection connection = DataBase.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setDouble(1, amount);
+            stmt.setBytes(2, MessagingUtil.getWorldId(world));
+            stmt.setString(3, account);
+            stmt.setString(4, asset);
+            stmt.setDouble(5, amount);
+            return stmt.executeUpdate() == 1;
+        } catch (SQLException e) {
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "Could not debit account holding", e);
+            return false;
+        }
+    }
+
+    public static boolean setHolding(World world, String account, String asset, double quantity) {
+        if (!Double.isFinite(quantity) || quantity < 0 || !isValidAssetQuantity(world, asset, quantity)) {
+            return false;
+        }
+        String sql = "INSERT INTO account_assets (world , account_name, asset_id, quantity) VALUES (?, ?, ?, ?) " + (!DataBase.isMySQL()? "ON CONFLICT(world, account_name, asset_id) DO UPDATE SET quantity = excluded.quantity;" : "ON DUPLICATE KEY UPDATE quantity = VALUES(quantity);");
+
+        try (Connection connection = DataBase.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setBytes(1, MessagingUtil.getWorldId(world));
             stmt.setString(2, account);
             stmt.setString(3, asset);
@@ -41,26 +87,20 @@ public class AccountHoldings {
         return false;
     }
 
-    public static void deleteHolding(World world,String account, String asset) {
-        String sql = "DELETE FROM account_assets WHERE world = ? AND account_name = ? AND asset_id = ?;";
-
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
-            stmt.setBytes(1, MessagingUtil.getWorldId(world));
-            stmt.setString(2, account);
-            stmt.setString(3, asset);
-
-            stmt.executeUpdate();
-
-        } catch (SQLException e) {
-            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
+    private static boolean isValidAssetQuantity(World world, String assetCode, double quantity) {
+        if (world == null || assetCode == null) {
+            return false;
         }
-
+        Asset asset = Assets.getAssetData(world, assetCode);
+        return asset != null && ((asset.getAssetType() != 2 && asset.getAssetType() != 3)
+                || (quantity <= Integer.MAX_VALUE && quantity == Math.rint(quantity)));
     }
 
     public static double getAccountAssetBalance(World world,String account, String asset) {
         String sql = "SELECT quantity FROM account_assets WHERE world = ? AND account_name = ? AND asset_id = ?;";
 
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
+        try (Connection connection = DataBase.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setBytes(1, MessagingUtil.getWorldId(world));
             stmt.setString(2, account);
             stmt.setString(3, asset);
@@ -79,19 +119,22 @@ public class AccountHoldings {
     }
 
     public static List<AssetCache> AssetBalancesToAssetData(World world,String account) {
-        String sql = "SELECT aa.asset_id, a.asset_type, aa.quantity, a.meta, " +
+        String sql = "WITH latest_candles AS (" +
+                "SELECT world, asset_id, close, ROW_NUMBER() OVER (PARTITION BY world, asset_id ORDER BY time DESC) AS rn " +
+                "FROM candles_day) " +
+                "SELECT aa.asset_id, a.asset_type, aa.quantity, a.meta, " +
                 "IFNULL(c.close, 0) AS price, " +
                 "(aa.quantity * IFNULL(c.close, 0)) AS value " +
                 "FROM account_assets aa " +
                 "JOIN assets a ON aa.world = a.world AND aa.asset_id = a.asset_id " +
-                "LEFT JOIN candles_day c ON aa.world = c.world AND aa.asset_id = c.asset_id " +
-                "AND c.time = (SELECT MAX(time) FROM candles_day WHERE world = aa.world AND asset_id = aa.asset_id) " +
+                "LEFT JOIN latest_candles c ON aa.world = c.world AND aa.asset_id = c.asset_id AND c.rn = 1 " +
                 "WHERE aa.world = ? AND aa.account_name = ? " +
                 "ORDER BY a.asset_type";
 
         List<AssetCache> balances = new ArrayList<>();
 
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
+        try (Connection connection = DataBase.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setBytes(1, MessagingUtil.getWorldId(world));
             stmt.setString(2, account);
 

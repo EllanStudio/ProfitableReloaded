@@ -1,11 +1,11 @@
-name: Profitable
+name: ProfitableReloaded
 version: ${project.version}
 main: com.faridfaharaj.profitable.Profitable
 author: faridfaharaj
-prefix: "Profitable"
+prefix: "ProfitableReloaded"
 api-version: '26.2'
 description: "Real supply and demand in minecraft!"
-website: "https://github.com/faridfaharaj/Profitable"
+website: "https://github.com/EllanServer/ProfitableReloaded"
 softdepend:
   - Vault
   - PlayerPoints
@@ -20,18 +20,23 @@ commands:
 
   buy:
     description: Command used to buy assets on the exchange
-    usage: /buy <Asset> <units> <price> <Order Type>
+    usage: /buy [Asset|hand] [units] [price] [limit|market|stop-limit]
     aliases: [ ]
 
   sell:
     description: Command used to sell assets on the exchange
-    usage: /sell <Asset> <units> <price> <Order Type>
+    usage: /sell [Asset|hand] [units] [price] [limit|market|stop-limit]
     aliases: [ ]
 
   assets:
     description: displays all registered assets
     usage: /assets
     aliases: [gui, profitable]
+
+  trade:
+    description: Opens the trading interface
+    usage: /trade
+    aliases: [ ]
 
   top:
     description: Lets you view the most popular assets
@@ -49,8 +54,8 @@ commands:
     aliases: [wal, portfolio]
 
   delivery:
-    description: Displays and sets where should your items and entities arrive
-    usage: /delivery or /delivery set items or /delivery set entity
+    description: Legacy compatibility command; 0.0.1 settles trades to the exchange wallet
+    usage: /delivery
     aliases: [ ]
 
   claimtag:
@@ -64,13 +69,13 @@ commands:
     aliases: [ ]
 
   price:
-    description: Shows the latest price and daily change of an asset
+    description: Shows latest price, daily change, range and volume of an asset
     usage: /price <Asset> or /price hand
     aliases: [quote] 
 
   admin:
     description: Admin commands
-    usage: /admin <subcomand> <args>...
+    usage: /admin <subcommand> <args>...
     aliases: [ ]
 
 permissions:
@@ -85,11 +90,16 @@ permissions:
     description: "Allows the player to trade currencies on the exchange"
     default: true
 
+  profitable.market.trade.gui:
+    description: "Allows the player to use the trading interface"
+    default: true
+
   profitable.market.trade.*:
     description: "Grants access to trade on the exchange"
     default: true
     children:
-      profitable.market.trade.asset.currency: true
+      profitable.market.trade.gui: true
+      profitable.market.trade.asset.forex: true
       profitable.market.trade.asset.item: true
       profitable.market.trade.asset.entity: true
 
@@ -135,10 +145,10 @@ permissions:
     description: "Grants the ability to change own active account's password"
     default: true
   profitable.account.manage.logout:
-    description: "Grants the ability to delete own active account"
+    description: "Grants the ability to log out of the active account"
     default: true
   profitable.account.manage.setdelivery:
-    description: "Grants the ability to change own active account's delivery location"
+    description: "Legacy permission retained for compatibility; delivery locations are ignored in 0.0.1"
     default: true
   profitable.account.manage.orders.cancel:
     description: "Grants the ability to cancel orders on own account"
@@ -147,16 +157,16 @@ permissions:
     description: "Grants the ability to cancel all orders on own account at once"
     default: true
   profitable.account.funds.deposit:
-    description: "Grants the ability to deposit external currencies"
+    description: "Grants the ability to deposit supported assets into the exchange wallet"
     default: true
   profitable.account.funds.withdraw:
-    description: "Grants the ability to withdraw external currencies"
+    description: "Grants the ability to withdraw supported assets from the exchange wallet"
     default: true
   profitable.account.info.orders:
     description: "Grants the ability to view detailed information of orders on own account"
     default: true
   profitable.account.info.delivery:
-    description: "Grants the ability to check own active account's delivery location"
+    description: "Legacy permission retained for compatibility; delivery locations are ignored in 0.0.1"
     default: true
   profitable.account.info.wallet:
     description: "Grants the ability to view asset balances on own account"
@@ -218,7 +228,7 @@ permissions:
     description: "Grants the ability to view an account's wallet contents"
     default: op
   profitable.admin.accounts.info.delivery:
-    description: "Grants the ability to view an account's delivery locations"
+    description: "Legacy permission retained for compatibility; delivery locations are ignored in 0.0.1"
     default: op
   profitable.admin.accounts.info.orders:
     description: "Grants the ability to view all orders owned by some account"
@@ -233,10 +243,10 @@ permissions:
     description: "Grants the ability to log some one out of their account"
     default: op
   profitable.admin.accounts.manage.wallet:
-    description: "Grants the ability to set asset balances to an account's wallet"
+    description: "Grants audited, idempotent absolute wallet mint/burn adjustments"
     default: op
   profitable.admin.accounts.manage.delivery:
-    description: "Grants the ability to change an accounts delivery location"
+    description: "Legacy permission retained for compatibility; delivery locations are ignored in 0.0.1"
     default: op
   profitable.admin.accounts.manage.delete:
     description: "Grants the ability to delete any account"
@@ -246,10 +256,10 @@ permissions:
     description: "Allows registering assets to the exchange"
     default: op
   profitable.admin.assets.manage.newtransaction:
-    description: "lets you insert transactions to simulate fake price changes"
+    description: "Allows inserting idempotent, audited synthetic candle events"
     default: op
   profitable.admin.assets.manage.resettransactions:
-    description: "Allows to erase all transactions from an asset"
+    description: "Legacy compatibility permission; correlated candle history is not erased"
     default: op
   profitable.admin.assets.manage.delete:
     description: "Allows DELETION of assets"
@@ -265,19 +275,26 @@ permissions:
     description: "Allows canceling specific orders"
     default: op
   profitable.admin.orders.manage.delete:
-    description: "Allows DELETING specific orders"
+    description: "Compatibility alias for safely cancelling an order and queueing its escrow refund"
     default: op
   profitable.admin.orders.manage.cancelall:
     description: "Allows canceling all orders"
     default: op
   profitable.admin.orders.manage.deleteall:
-    description: "Allows DELETING all orders"
+    description: "Compatibility alias for safely cancelling all orders and queueing escrow refunds"
     default: op
   profitable.admin.orders.manage.newlimitorder:
     description: "Allows inserting limit orders"
     default: op
   profitable.admin.orders.info.findbyasset:
     description: "Allows looking at all orders from any order book"
+    default: op
+
+  profitable.admin.outbox.info:
+    description: "Allows listing DEAD durable wallet-credit deliveries and their correlation IDs"
+    default: op
+  profitable.admin.outbox.retry:
+    description: "Allows safely requeueing DEAD wallet-credit deliveries"
     default: op
 
   profitable.admin.*:
@@ -308,6 +325,8 @@ permissions:
       profitable.admin.orders.manage.deleteall: true
       profitable.admin.orders.manage.newlimitorder: true
       profitable.admin.orders.info.findbyasset: true
+      profitable.admin.outbox.info: true
+      profitable.admin.outbox.retry: true
 
   profitable.admin.accounts.*:
     description: "Grants unlimited access to account related commands"
@@ -394,7 +413,7 @@ permissions:
       profitable.admin.orders.info.findbyasset: true
 
   profitable.admin.mod:
-    description: "Grants access to fix raids or smth, idk"
+    description: "Grants operational recovery permissions for accounts, assets, orders and delivery outbox"
     default: op
     children:
       profitable.admin.accounts.info.getplayeracc: true
@@ -414,6 +433,8 @@ permissions:
       profitable.admin.orders.manage.cancel: true
       profitable.admin.orders.manage.delete: true
       profitable.admin.orders.info.findbyasset: true
+      profitable.admin.outbox.info: true
+      profitable.admin.outbox.retry: true
 
   profitable.admin.configurer:
     description: "Grants access needed to create assets and initial supply"

@@ -26,10 +26,16 @@ public final class UnitsSelect extends QuantitySelectGui {
 
     AssetCache[][] assetCache;
     AssetCache assetData;
+    boolean fromTrade;
     public UnitsSelect(AssetCache[][] assetCache, AssetCache assetData, Order order, List<Order> bidOrders, List<Order> askOrders) {
+        this(assetCache, assetData, order, bidOrders, askOrders, false);
+    }
+
+    public UnitsSelect(AssetCache[][] assetCache, AssetCache assetData, Order order, List<Order> bidOrders, List<Order> askOrders, boolean fromTrade) {
         super(Profitable.getLang().get("gui.order-building.units-select.title"), assetData.getAsset().getAssetType() != 2 && assetData.getAsset().getAssetType() != 3, assetData.getAsset().getAssetType() == 2 || assetData.getAsset().getAssetType() == 3, 1);
         this.assetCache = assetCache;
         this.assetData = assetData;
+        this.fromTrade = fromTrade;
 
         this.order = order;
         this.bidOrders = bidOrders;
@@ -64,7 +70,7 @@ public final class UnitsSelect extends QuantitySelectGui {
     protected void onSubmitAmount(Player player, double amount) {
 
         player.closeInventory();
-        new ConfirmOrder(assetCache, assetData, new Order(null, null, assetData.getAsset().getCode(), order.isSideBuy(), order.getPrice(), amount, order.getType()), bidOrders, askOrders).openGui(player);
+        new ConfirmOrder(assetCache, assetData, new Order(null, null, assetData.getAsset().getCode(), order.isSideBuy(), order.getPrice(), amount, order.getType()), bidOrders, askOrders, fromTrade).openGui(player);
 
     }
 
@@ -73,10 +79,10 @@ public final class UnitsSelect extends QuantitySelectGui {
 
         if(order.getType() == Order.OrderType.MARKET){
             player.closeInventory();
-            new OrderTypeGui(assetCache, assetData, order, bidOrders, askOrders).openGui(player);
+            new OrderTypeGui(assetCache, assetData, order, bidOrders, askOrders, fromTrade).openGui(player);
         }else {
             player.closeInventory();
-            new PriceSelect(assetCache, assetData, order, bidOrders, askOrders).openGui(player);
+            new PriceSelect(assetCache, assetData, order, bidOrders, askOrders, fromTrade).openGui(player);
         }
 
     }

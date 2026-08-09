@@ -27,12 +27,18 @@ public final class PriceSelect  extends QuantitySelectGui {
 
     AssetCache[][] assetCache;
     AssetCache assetData;
+    boolean fromTrade;
     public PriceSelect(AssetCache[][] assetCache, AssetCache assetData, Order order, List<Order> bidOrders, List<Order> askOrders) {
+        this(assetCache, assetData, order, bidOrders, askOrders, false);
+    }
+
+    public PriceSelect(AssetCache[][] assetCache, AssetCache assetData, Order order, List<Order> bidOrders, List<Order> askOrders, boolean fromTrade) {
         super(Profitable.getLang().get("gui.order-building.price-select.title"), true, false,
                 Math.max(order.isSideBuy()? (bidOrders.isEmpty()? assetData.getlastCandle().getClose() : bidOrders.getFirst().getPrice()) :(askOrders.isEmpty()? assetData.getlastCandle().getClose() : askOrders.getFirst().getPrice()), 0.001)
         );
         this.assetCache = assetCache;
         this.assetData = assetData;
+        this.fromTrade = fromTrade;
 
         this.order = order;
         this.bidOrders = bidOrders;
@@ -68,12 +74,12 @@ public final class PriceSelect  extends QuantitySelectGui {
     @Override
     protected void onSubmitAmount(Player player, double amount) {
         player.closeInventory();
-        new UnitsSelect(assetCache, assetData, new Order(order.getUuid(), order.getOwner(), order.getAsset(), order.isSideBuy(), amount, order.getUnits(), order.getType()), bidOrders, askOrders).openGui(player);
+        new UnitsSelect(assetCache, assetData, new Order(order.getUuid(), order.getOwner(), order.getAsset(), order.isSideBuy(), amount, order.getUnits(), order.getType()), bidOrders, askOrders, fromTrade).openGui(player);
     }
 
     @Override
     protected void onReturn(Player player) {
         player.closeInventory();
-        new OrderTypeGui(assetCache, assetData, order, bidOrders, askOrders).openGui(player);
+        new OrderTypeGui(assetCache, assetData, order, bidOrders, askOrders, fromTrade).openGui(player);
     }
 }

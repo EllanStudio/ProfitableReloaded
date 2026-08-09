@@ -7,6 +7,7 @@ import com.faridfaharaj.profitable.data.tables.Orders;
 import com.faridfaharaj.profitable.tasks.gui.guis.UserOrdersGui;
 import com.faridfaharaj.profitable.util.MessagingUtil;
 import org.bukkit.Sound;
+import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -28,6 +29,11 @@ public class OrdersCommand  implements CommandExecutor {
                 return true;
             }
 
+            if(!player.hasPermission("profitable.account.info.orders")){
+                MessagingUtil.sendGenericMissingPerm(sender);
+                return true;
+            }
+
             new UserOrdersGui(player, null).openGui(player);
 
         }else{
@@ -43,9 +49,11 @@ public class OrdersCommand  implements CommandExecutor {
             return;
         }
 
+        World world = player.getWorld();
+        String account = Accounts.getAccount(player);
         Profitable.getfolialib().getScheduler().runAsync(task -> {
 
-            List<Order> orders = Orders.getAccountOrders(player.getWorld(), Accounts.getAccount(player));
+            List<Order> orders = Orders.getAccountOrders(world, account);
 
             if(orders.isEmpty()){
                 MessagingUtil.sendComponentMessage(player, Profitable.getLang().get("orders.error.no-orders"));
@@ -54,7 +62,7 @@ public class OrdersCommand  implements CommandExecutor {
 
             int cancelled = 0;
             for(Order order : orders){
-                if(Orders.cancelOrder(order.getUuid(), player)){
+                if(Orders.cancelOrder(order.getUuid(), player, world, account)){
                     cancelled++;
                 }
             }

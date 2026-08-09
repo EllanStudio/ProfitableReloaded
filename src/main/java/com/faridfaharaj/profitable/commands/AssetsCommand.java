@@ -21,6 +21,11 @@ public class AssetsCommand implements CommandExecutor {
 
         if(sender instanceof Player player){
 
+            if(!player.hasPermission("profitable.asset.categories")){
+                MessagingUtil.sendGenericMissingPerm(sender);
+                return true;
+            }
+
             new AssetExplorer(player, 2, null).openGui(player);
             return true;
         }else {

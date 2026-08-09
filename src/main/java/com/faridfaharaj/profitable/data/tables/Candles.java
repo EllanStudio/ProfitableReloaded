@@ -13,6 +13,7 @@ import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import org.bukkit.World;
 
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.util.logging.Level;
 import java.sql.ResultSet;
@@ -28,54 +29,14 @@ public class Candles {
     static String[] tables = {"day", "week", "month"};
     static long[] intervals = {24000, 168000, 720000};
 
-    public static boolean updateDay(World world, String asset, double price, double volume){
-
-        for(int i = 0; i<3; i++){
-
-            String sqlite = "INSERT INTO candles_"+ tables[i] +" (world, time, open, close, high, low, volume, asset_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?) " +
-                    "ON CONFLICT(world, time, asset_id) DO UPDATE SET" +
-                    "    high = MAX(high, excluded.high)," +
-                    "    low = MIN(low, excluded.low)," +
-                    "    close = excluded.close, " +
-                    "    volume = volume + excluded.volume;";
-
-            String mysql = "INSERT INTO candles_" + tables[i] + " (world, time, open, close, high, low, volume, asset_id) " +
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?) " +
-                    "ON DUPLICATE KEY UPDATE " +
-                    "high = GREATEST(high, VALUES(high)), " +
-                    "low = LEAST(low, VALUES(low)), " +
-                    "close = VALUES(close), " +
-                    "volume = volume + VALUES(volume);";
-
-
-            try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(Profitable.getInstance().getConfig().getInt("database.database-type") == 0? sqlite:mysql)) {
-                stmt.setBytes(1, MessagingUtil.getWorldId(world));
-                stmt.setLong(2, (world.getFullTime() / intervals[i]) * intervals[i]);
-                stmt.setDouble(3,price);
-                stmt.setDouble(4,price);
-                stmt.setDouble(5,price);
-                stmt.setDouble(6,price);
-                stmt.setDouble(7,volume);
-                stmt.setString(8,asset);
-
-                stmt.executeUpdate();
-
-            } catch (SQLException e) {
-                Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
-                return false;
-            }
-
-        }
-
-        return true;
-    }
-
     public static Candle getLastDay(World world,String asset, long time) {
-        String sql = "SELECT time, open, close, high, low, volume FROM candles_day WHERE world = ? AND asset_id = ? ORDER BY time DESC LIMIT 1;";
+        String sql = "SELECT time, open, close, high, low, volume FROM candles_day WHERE world = ? AND asset_id = ? AND time <= ? ORDER BY time DESC LIMIT 1;";
 
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
+        try (Connection connection = DataBase.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setBytes(1, MessagingUtil.getWorldId(world));
             stmt.setString(2, asset);
+            stmt.setLong(3, time);
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
@@ -129,7 +90,8 @@ public class Candles {
         byte[] worldBytes = MessagingUtil.getWorldId(world);
         long roundedTime = (time / intervals[0]) * intervals[0];
 
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
+        try (Connection connection = DataBase.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setLong(1, roundedTime);
             stmt.setBytes(2, worldBytes);      // for candle filtering
             stmt.setBytes(3, worldBytes);      // for final asset filter
@@ -174,7 +136,8 @@ public class Candles {
     public static Candle getPriceSummary(World world, String asset) {
         String sql = "SELECT time, open, close, high, low, volume FROM candles_day WHERE world = ? AND asset_id = ? ORDER BY time DESC LIMIT 2;";
 
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
+        try (Connection connection = DataBase.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setBytes(1, MessagingUtil.getWorldId(world));
             stmt.setString(2, asset);
 
@@ -218,7 +181,8 @@ public class Candles {
 
         List<Candle> candles = new ArrayList<>();
 
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
+        try (Connection connection = DataBase.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setBytes(1, MessagingUtil.getWorldId(world));
             stmt.setString(2, asset);
             stmt.setLong(3, time);
@@ -306,7 +270,8 @@ public class Candles {
 
         }
 
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
+        try (Connection connection = DataBase.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setBytes(1, MessagingUtil.getWorldId(world));
             stmt.setLong(2, (world.getFullTime() / intervals[2]) * intervals[2]);
 
@@ -346,7 +311,8 @@ public class Candles {
     public static void assetDeleteAllCandles(World world,String asset) {
         String sql = "DELETE FROM candles_day WHERE world = ? AND asset_id = ?;";
 
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
+        try (Connection connection = DataBase.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setBytes(1, MessagingUtil.getWorldId(world));
             stmt.setString(2, asset);
             stmt.executeUpdate();
@@ -357,7 +323,8 @@ public class Candles {
 
         sql = "DELETE FROM candles_week WHERE world = ? AND asset_id = ?;";
 
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
+        try (Connection connection = DataBase.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setBytes(1, MessagingUtil.getWorldId(world));
             stmt.setString(2, asset);
             stmt.executeUpdate();
@@ -368,7 +335,8 @@ public class Candles {
 
         sql = "DELETE FROM candles_month WHERE world = ? AND asset_id = ?;";
 
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
+        try (Connection connection = DataBase.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setBytes(1, MessagingUtil.getWorldId(world));
             stmt.setString(2, asset);
             stmt.executeUpdate();

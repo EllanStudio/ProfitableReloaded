@@ -16,12 +16,16 @@ import org.bukkit.block.Block;
 import org.bukkit.block.Chest;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
+import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.persistence.PersistentDataType;
 
 import java.io.*;
 import java.util.*;
+import java.util.function.Consumer;
+import java.util.logging.Level;
 
 public class Asset {
 
@@ -229,12 +233,27 @@ public class Asset {
     }
 
     public static void distributeAsset(World world, String account, Asset asset, double ammount){
+        if (asset == null || account == null || !Double.isFinite(ammount) || ammount <= 0) {
+            Profitable.getInstance().getLogger().warning("Rejected invalid asset distribution request");
+            return;
+        }
+        if ((asset.getAssetType() == 2 || asset.getAssetType() == 3)
+                && (ammount > Integer.MAX_VALUE || ammount != Math.rint(ammount))) {
+            Profitable.getInstance().getLogger().warning("Rejected non-integral or oversized physical asset distribution for " + asset.getCode());
+            return;
+        }
 
         switch (asset.getAssetType()) {
             case 2: // Item
 
                 if(Configuration.PHYSICALDELIVERY){
-                    sendCommodityItem(world, account, asset.getCode(), (int) ammount);
+                    Location delivery = Accounts.getItemDelivery(world, account);
+                    Material material = Material.matchMaterial(asset.getCode());
+                    if (delivery == null || delivery.getWorld() == null || material == null || !material.isItem()) {
+                        sendBalance(world, account, asset.getCode(), ammount);
+                    } else {
+                        sendCommodityItem(world, account, asset.getCode(), (int) ammount);
+                    }
                 }else {
                     sendBalance(world, account, asset.getCode(), ammount);
                 }
@@ -243,7 +262,13 @@ public class Asset {
             case 3: // Entity
 
                 if(Configuration.PHYSICALDELIVERY){
-                    sendCommodityEntity(world, account, asset.getCode(), (int) ammount);
+                    Location delivery = Accounts.getEntityDelivery(world, account);
+                    EntityType type = Registry.ENTITY_TYPE.get(NamespacedKey.minecraft(asset.getCode().toLowerCase(Locale.ROOT)));
+                    if (delivery == null || delivery.getWorld() == null || type == null || !type.isSpawnable()) {
+                        sendBalance(world, account, asset.getCode(), ammount);
+                    } else {
+                        sendCommodityEntity(world, account, asset.getCode(), (int) ammount);
+                    }
                 }else {
                     sendBalance(world, account, asset.getCode(), ammount);
                 }
@@ -276,67 +301,135 @@ public class Asset {
 
     public static void sendBalance(World world, String account, String asset, double ammount){
 
-        double balance = AccountHoldings.getAccountAssetBalance(world, account, asset);
-        AccountHoldings.setHolding(world, account, asset, balance + ammount);
+        if (!AccountHoldings.addHolding(world, account, asset, ammount)) {
+            Profitable.getInstance().getLogger().warning("Could not credit " + ammount + " " + asset + " to " + account);
+        }
 
     }
 
     public static void sendItemToPlayer(Player player, String asset, int amount){
+        sendItemToPlayer(player, asset, amount, ignored -> { });
+    }
 
-        Material material = Material.getMaterial(asset);
+    public static void sendItemToPlayer(Player player, String asset, int amount, Consumer<Boolean> completion){
+
+        Material material = Material.matchMaterial(asset);
+        if (material == null || !material.isItem() || amount <= 0) {
+            Profitable.getInstance().getLogger().warning("sendItemToPlayer: unknown item Material '" + asset + "'");
+            completion.accept(false);
+            return;
+        }
         int maxStackSize = material.getMaxStackSize();
 
         Profitable.getfolialib().getScheduler().runAtEntity(player, task -> {
-
-            int missing = amount;
-            while (missing > 0) {
-                int giveAmount = Math.min(missing, maxStackSize);
-                ItemStack itemStack = new ItemStack(material, giveAmount);
-
-
-                Inventory inventory = player.getInventory();
-                for (ItemStack drop : inventory.addItem(itemStack).values()) {
-                    player.getWorld().dropItemNaturally(player.getLocation(), drop);
-                }
-
-                missing -= giveAmount;
+            if (!player.isOnline()) {
+                completion.accept(false);
+                return;
             }
-                    player.playSound(player, Sound.ENTITY_ITEM_PICKUP, 1,1);
-                    player.playSound(player, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1,1);
-                    player.playSound(player, Sound.ENTITY_FIREWORK_ROCKET_BLAST, 1,1);
-                    player.playSound(player, Sound.ENTITY_FIREWORK_ROCKET_TWINKLE, 1,1);
+            Inventory inventory = player.getInventory();
+            int inventoryBefore = countMaterial(inventory, material);
+            List<Item> droppedItems = new ArrayList<>();
+            try {
+                int missing = amount;
+                while (missing > 0) {
+                    int giveAmount = Math.min(missing, maxStackSize);
+                    ItemStack itemStack = new ItemStack(material, giveAmount);
+
+                    for (ItemStack drop : inventory.addItem(itemStack).values()) {
+                        droppedItems.add(player.getWorld().dropItemNaturally(player.getLocation(), drop));
+                    }
+
+                    missing -= giveAmount;
+                }
+                player.playSound(player, Sound.ENTITY_ITEM_PICKUP, 1,1);
+                player.playSound(player, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1,1);
+                player.playSound(player, Sound.ENTITY_FIREWORK_ROCKET_BLAST, 1,1);
+                player.playSound(player, Sound.ENTITY_FIREWORK_ROCKET_TWINKLE, 1,1);
+            } catch (RuntimeException error) {
+                try {
+                    rollbackItemDelivery(inventory, material, inventoryBefore, droppedItems);
+                } catch (RuntimeException rollbackError) {
+                    Profitable.getInstance().getLogger().log(Level.SEVERE,
+                            "Could not roll back failed item delivery for " + asset, rollbackError);
+                }
+                Profitable.getInstance().getLogger().log(Level.SEVERE, "Could not deliver item asset " + asset, error);
+                completion.accept(false);
+                return;
+            }
+            completion.accept(true);
         }
         );
 
     }
 
     public static void sendCommodityEntityToPlayer(Player player, String account, String asset, int amount){
+        sendCommodityEntityToPlayer(player, account, asset, amount, ignored -> { });
+    }
 
-        EntityType entityType = EntityType.fromName(asset);
+    public static void sendCommodityEntityToPlayer(Player player, String account, String asset, int amount,
+                                                    Consumer<Boolean> completion){
+        World accountWorld = player.getWorld();
+        sendCommodityEntityToPlayer(player, accountWorld, account, asset, amount, completion);
+    }
 
-        String claimId = Accounts.getEntityClaimId(player.getWorld(), account);
+    public static void sendCommodityEntityToPlayer(Player player, World accountWorld, String account, String asset,
+                                                    int amount, Consumer<Boolean> completion){
+        Profitable.getfolialib().getScheduler().runAsync(task -> {
+            String claimId = Accounts.getEntityClaimId(accountWorld, account);
+            sendCommodityEntityToPlayerWithClaim(player, asset, amount, claimId, completion);
+        });
+    }
+
+    public static void sendCommodityEntityToPlayerWithClaim(Player player, String asset, int amount, String claimId,
+                                                             Consumer<Boolean> completion){
+
+        EntityType entityType = Registry.ENTITY_TYPE.get(NamespacedKey.minecraft(asset.toLowerCase(Locale.ROOT)));
+        if (entityType == null || !entityType.isSpawnable() || amount <= 0) {
+            Profitable.getInstance().getLogger().warning("sendCommodityEntityToPlayer: unknown or unspawnable EntityType '" + asset + "'");
+            completion.accept(false);
+            return;
+        }
+
         Profitable.getfolialib().getScheduler().runAtEntity(player, task -> {
-            World world = player.getWorld();
-            Location location = player.getLocation();
-
-            for(int i = 0; i<amount; i++){
-                Entity entity = world.spawnEntity(location, entityType);
-                entity.customName(claimId == null ? null : LegacyComponentSerializer.legacySection().deserialize(claimId));
-                entity.setCustomNameVisible(true);
+            if (!player.isOnline() || claimId == null) {
+                completion.accept(false);
+                return;
             }
+            List<Entity> spawned = new ArrayList<>();
+            try {
+                World world = player.getWorld();
+                Location location = player.getLocation();
 
-            world.spawnParticle(Particle.FIREWORK, location, 10);
-            world.playSound(location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1,1);
-            world.playSound(location, Sound.ENTITY_FIREWORK_ROCKET_BLAST, 1,1);
-            world.playSound(location, Sound.ENTITY_FIREWORK_ROCKET_TWINKLE, 1,1);
+                for(int i = 0; i<amount; i++){
+                    Entity entity = world.spawnEntity(location, entityType);
+                    spawned.add(entity);
+                    applyClaim(entity, claimId);
+                }
+
+                world.spawnParticle(Particle.FIREWORK, location, 10);
+                world.playSound(location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1,1);
+                world.playSound(location, Sound.ENTITY_FIREWORK_ROCKET_BLAST, 1,1);
+                world.playSound(location, Sound.ENTITY_FIREWORK_ROCKET_TWINKLE, 1,1);
+            } catch (RuntimeException error) {
+                try {
+                    rollbackEntityDelivery(spawned);
+                } catch (RuntimeException rollbackError) {
+                    Profitable.getInstance().getLogger().log(Level.SEVERE,
+                            "Could not roll back failed entity delivery for " + asset, rollbackError);
+                }
+                Profitable.getInstance().getLogger().log(Level.SEVERE, "Could not deliver entity asset " + asset, error);
+                completion.accept(false);
+                return;
+            }
+            completion.accept(true);
         });
 
     }
 
     public static void sendCommodityItem(World world, String account, String asset, int amount){
 
-        Material material = Material.getMaterial(asset);
-        if (material == null) {
+        Material material = Material.matchMaterial(asset);
+        if (material == null || !material.isItem()) {
             Profitable.getInstance().getLogger().warning("sendCommodityItem: unknown Material '" + asset + "'");
             return;
         }
@@ -369,12 +462,16 @@ public class Asset {
                         }
 
                     }else{
-
-                        deliveryWorld.dropItemNaturally(location, new ItemStack(material, amount));
+                        int missing = amount;
+                        while (missing > 0) {
+                            int giveAmount = Math.min(missing, maxStackSize);
+                            deliveryWorld.dropItemNaturally(location, new ItemStack(material, giveAmount));
+                            missing -= giveAmount;
+                        }
 
                     }
 
-                    deliveryWorld.spawnParticle(Particle.FIREWORK, location.add(0.5,0.5,0.5), 5);
+                    deliveryWorld.spawnParticle(Particle.FIREWORK, location.clone().add(0.5,0.5,0.5), 5);
                     deliveryWorld.playSound(location, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1,1);
                     deliveryWorld.playSound(location, Sound.ENTITY_FIREWORK_ROCKET_BLAST, 1,1);
                     deliveryWorld.playSound(location, Sound.ENTITY_FIREWORK_ROCKET_TWINKLE, 1,1);
@@ -385,8 +482,8 @@ public class Asset {
 
     public static void sendCommodityEntity(World world, String account, String asset, int amount){
 
-        EntityType entityType = EntityType.fromName(asset);
-        if (entityType == null) {
+        EntityType entityType = Registry.ENTITY_TYPE.get(NamespacedKey.minecraft(asset.toLowerCase(Locale.ROOT)));
+        if (entityType == null || !entityType.isSpawnable()) {
             Profitable.getInstance().getLogger().warning("sendCommodityEntity: unknown EntityType '" + asset + "'");
             return;
         }
@@ -402,8 +499,7 @@ public class Asset {
 
             for(int i = 0; i<amount; i++){
                 Entity entity = deliveryWorld.spawnEntity(location, entityType);
-                entity.customName(claimId == null ? null : LegacyComponentSerializer.legacySection().deserialize(claimId));
-                entity.setCustomNameVisible(true);
+                applyClaim(entity, claimId);
             }
 
             deliveryWorld.spawnParticle(Particle.FIREWORK, location, 10);
@@ -415,7 +511,17 @@ public class Asset {
     }
 
     public static void chargeAndRun(Player player, Asset asset, double ammount, Runnable runnable){
-
+        if (asset == null || !Double.isFinite(ammount) || ammount < 0) {
+            MessagingUtil.sendGenericInvalidAmount(player, String.valueOf(ammount));
+            return;
+        }
+        if ((asset.getAssetType() == 2 || asset.getAssetType() == 3)
+                && (ammount > Integer.MAX_VALUE || ammount != Math.rint(ammount))) {
+            MessagingUtil.sendComponentMessage(player, Profitable.getLang().get("assets.error.cant-fractional",
+                    Map.entry("%asset%", asset.getCode())
+            ));
+            return;
+        }
         if(ammount == 0){
             runnable.run();
             return;
@@ -501,19 +607,7 @@ public class Asset {
     }
 
     public static boolean retrieveBalance(World world, String account, double balance, String asset, double ammount){
-
-        double difference = balance - ammount;
-        if(difference < 0){
-
-            return false;
-
-        }
-        if(difference <= 0){
-            AccountHoldings.deleteHolding(world, account, asset);
-        }else{
-            AccountHoldings.setHolding(world, account, asset, difference);
-        }
-        return true;
+        return AccountHoldings.takeHolding(world, account, asset, ammount);
 
     }
 
@@ -534,8 +628,9 @@ public class Asset {
             double fee = Configuration.parseFee(Configuration.DEPOSITFEES, ammount);
             double total = Math.ceil(ammount+fee);
             if(PlayerPointsHook.getApi().take(player.getUniqueId(), (int) total)){
-                if(total-ammount+fee != 0){
-                    AccountHoldings.setHolding(world, account, asset, balance+(total-ammount+fee));
+                double remainder = total - (ammount + fee);
+                if(remainder > 0){
+                    AccountHoldings.addHolding(world, account, asset, remainder);
                 }
                 MessagingUtil.sendComponentMessage(player, Profitable.getLang().get("assets.auto-deposit-notice",
                         Map.entry("%asset_amount%", MessagingUtil.assetAmmount(PlayerPointsHook.getAsset(), ammount))
@@ -580,7 +675,11 @@ public class Asset {
 
         // get from inventory
         Inventory inventory = player.getInventory();
-        ItemStack itemStack = new ItemStack(Material.getMaterial(asset), amount);
+        Material material = Material.matchMaterial(asset);
+        if (material == null || !material.isItem() || amount <= 0) {
+            return false;
+        }
+        ItemStack itemStack = new ItemStack(material, amount);
         if (inventory.containsAtLeast(itemStack, amount)) {
             inventory.removeItem(itemStack);
             return true;
@@ -594,7 +693,10 @@ public class Asset {
 
         // get from world
 
-        EntityType entityType = EntityType.fromName(asset);
+        EntityType entityType = Registry.ENTITY_TYPE.get(NamespacedKey.minecraft(asset.toLowerCase(Locale.ROOT)));
+        if (entityType == null || id == null || amount <= 0) {
+            return false;
+        }
 
         int entitiesRemaining = amount;
         List<Entity> entities = new ArrayList<>();
@@ -602,7 +704,11 @@ public class Asset {
         List<Entity> nearbyEntities = player.getNearbyEntities(20, 20, 20);
         for(Entity entity : nearbyEntities){
 
-            if(entity.customName() != null && id.equals(LegacyComponentSerializer.legacySection().serialize(entity.customName()))){
+            String storedClaim = entity.getPersistentDataContainer().get(
+                    new NamespacedKey(Profitable.getInstance(), "entity_claim_id"), PersistentDataType.STRING);
+            boolean legacyClaim = entity.customName() != null
+                    && id.equals(LegacyComponentSerializer.legacySection().serialize(entity.customName()));
+            if(id.equals(storedClaim) || legacyClaim){
 
                 if(entity.getType().equals(entityType)){
 
@@ -626,6 +732,61 @@ public class Asset {
         }
         return false;
 
+    }
+
+    private static void applyClaim(Entity entity, String claimId) {
+        if (claimId == null) {
+            return;
+        }
+        entity.getPersistentDataContainer().set(new NamespacedKey(Profitable.getInstance(), "entity_claim_id"),
+                PersistentDataType.STRING, claimId);
+        entity.customName(LegacyComponentSerializer.legacySection().deserialize(claimId));
+        entity.setCustomNameVisible(false);
+    }
+
+    private static int countMaterial(Inventory inventory, Material material) {
+        int total = 0;
+        for (ItemStack item : inventory.getContents()) {
+            if (item != null && item.getType() == material) {
+                total += item.getAmount();
+            }
+        }
+        return total;
+    }
+
+    private static void rollbackItemDelivery(Inventory inventory, Material material, int inventoryBefore,
+                                             List<Item> droppedItems) {
+        for (Item droppedItem : droppedItems) {
+            droppedItem.remove();
+        }
+        int excess = Math.max(0, countMaterial(inventory, material) - inventoryBefore);
+        int maxStackSize = material.getMaxStackSize();
+        while (excess > 0) {
+            int removeAmount = Math.min(excess, maxStackSize);
+            inventory.removeItem(new ItemStack(material, removeAmount));
+            excess -= removeAmount;
+        }
+        if (countMaterial(inventory, material) != inventoryBefore) {
+            throw new IllegalStateException("Inventory could not be restored to its pre-delivery state");
+        }
+    }
+
+    private static void rollbackEntityDelivery(List<Entity> spawned) {
+        RuntimeException failure = null;
+        for (Entity entity : spawned) {
+            try {
+                entity.remove();
+            } catch (RuntimeException error) {
+                if (failure == null) {
+                    failure = error;
+                } else {
+                    failure.addSuppressed(error);
+                }
+            }
+        }
+        if (failure != null) {
+            throw failure;
+        }
     }
 
 }

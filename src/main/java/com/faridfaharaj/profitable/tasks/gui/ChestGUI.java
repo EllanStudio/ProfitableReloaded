@@ -14,16 +14,37 @@ import org.bukkit.inventory.meta.ItemMeta;
 public abstract class ChestGUI implements InventoryHolder {
 
     private final Inventory inventory;
+    private Runnable pendingRenderer;
 
     public ChestGUI(int height, Component title){
         inventory = Bukkit.createInventory(this, 9*height, title);
     }
 
     public void openGui(Player player){
-        Profitable.getfolialib().getScheduler().runNextTick(task -> {
+        Profitable.getfolialib().getScheduler().runAtEntity(player, task -> {
             player.openInventory(inventory);
+            Runnable renderer;
+            synchronized (this) {
+                renderer = pendingRenderer;
+                pendingRenderer = null;
+            }
+            if (renderer != null && player.getOpenInventory().getTopInventory().getHolder() == this) {
+                renderer.run();
+            }
         });
     };
+
+    protected void render(Player player, Runnable renderer) {
+        Profitable.getfolialib().getScheduler().runAtEntity(player, task -> {
+            if (player.getOpenInventory().getTopInventory().getHolder() == this) {
+                renderer.run();
+            } else if (inventory.getViewers().isEmpty()) {
+                synchronized (this) {
+                    pendingRenderer = renderer;
+                }
+            }
+        });
+    }
 
     protected static int vectorSlotPosition(int x, int y){
         return x + (y * 9);

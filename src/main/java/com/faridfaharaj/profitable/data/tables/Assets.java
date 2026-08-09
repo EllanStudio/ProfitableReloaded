@@ -16,6 +16,7 @@ import java.io.ByteArrayInputStream;
 import java.util.logging.Level;
 import java.io.DataInputStream;
 import java.io.IOException;
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -25,13 +26,14 @@ public class Assets {
 
     public static boolean registerAsset(World world, String symbol, int assetType, byte[] meta) {
 
-        if(Objects.equals(symbol, VaultHook.getAsset().getCode())){
+                if(VaultHook.isConnected() && Objects.equals(symbol, VaultHook.getAsset().getCode())){
             return false;
         }
 
         String sql = "INSERT INTO assets (world, asset_id, asset_type, meta) VALUES (?, ?, ?, ?)";
 
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
+        try (Connection connection = DataBase.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setBytes(1, MessagingUtil.getWorldId(world));
             stmt.setString(2, symbol);
             stmt.setInt(3, assetType);
@@ -49,9 +51,10 @@ public class Assets {
     }
 
     public static void addAsset(World world, String ticker, int assetType, byte[] meta) {
-        String sql = "INSERT " + (Profitable.getInstance().getConfig().getInt("database.database-type") == 0 ? "OR ": "") + "IGNORE INTO assets (world, asset_id, asset_type, meta) VALUES (?, ?, ?, ?)";
+        String sql = "INSERT " + (!DataBase.isMySQL() ? "OR ": "") + "IGNORE INTO assets (world, asset_id, asset_type, meta) VALUES (?, ?, ?, ?)";
 
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
+        try (Connection connection = DataBase.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setBytes(1, MessagingUtil.getWorldId(world));
             stmt.setString(2, ticker);
             stmt.setInt(3, assetType);
@@ -65,22 +68,58 @@ public class Assets {
     }
 
     public static boolean updateAsset(World world, String assetID, Asset updatedAsset){
-        String sql = "UPDATE assets SET asset_id = ?, meta = ? WHERE world = ? AND asset_id = ?;";
+        byte[] worldId = MessagingUtil.getWorldId(world);
+        try (Connection connection = DataBase.getConnection()) {
+            boolean originalAutoCommit = connection.getAutoCommit();
+            connection.setAutoCommit(false);
+            try {
+                String lockSql = DataBase.isMySQL()
+                        ? "SELECT asset_id FROM assets WHERE world = ? AND asset_id = ? FOR UPDATE"
+                        : "UPDATE assets SET asset_id = asset_id WHERE world = ? AND asset_id = ?";
+                boolean exists;
+                try (PreparedStatement lock = connection.prepareStatement(lockSql)) {
+                    lock.setBytes(1, worldId);
+                    lock.setString(2, assetID);
+                    if (DataBase.isMySQL()) {
+                        try (ResultSet result = lock.executeQuery()) {
+                            exists = result.next();
+                        }
+                    } else {
+                        exists = lock.executeUpdate() == 1;
+                    }
+                }
+                if (!exists) {
+                    connection.rollback();
+                    return false;
+                }
 
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
+                boolean renaming = !assetID.equals(updatedAsset.getCode());
+                if (renaming && hasUnsettledAssetState(connection, worldId, assetID)) {
+                    connection.rollback();
+                    return false;
+                }
 
-            stmt.setString(1,updatedAsset.getCode());
-            stmt.setBytes(2, Asset.metaData(updatedAsset));
-            stmt.setBytes(3, MessagingUtil.getWorldId(world));
-            stmt.setString(4, assetID);
-
-            boolean success = stmt.executeUpdate() > 0;
-            if (success) {
+                try (PreparedStatement update = connection.prepareStatement(
+                        "UPDATE assets SET asset_id = ?, meta = ? WHERE world = ? AND asset_id = ?")) {
+                    update.setString(1, updatedAsset.getCode());
+                    update.setBytes(2, Asset.metaData(updatedAsset));
+                    update.setBytes(3, worldId);
+                    update.setString(4, assetID);
+                    if (update.executeUpdate() != 1) {
+                        connection.rollback();
+                        return false;
+                    }
+                }
+                connection.commit();
                 AssetDataCache.invalidate(world, assetID);
                 AssetDataCache.invalidate(world, updatedAsset.getCode());
+                return true;
+            } catch (SQLException | IOException error) {
+                connection.rollback();
+                throw error;
+            } finally {
+                connection.setAutoCommit(originalAutoCommit);
             }
-            return success;
-
         } catch (SQLException e) {
             Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
         } catch (IOException e) {
@@ -99,7 +138,8 @@ public class Assets {
 
         String sql = "SELECT asset_type, meta FROM assets WHERE world = ? AND asset_id = ?;";
 
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
+        try (Connection connection = DataBase.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setBytes(1, MessagingUtil.getWorldId(world));
             stmt.setString(2, assetID);
 
@@ -154,11 +194,38 @@ public class Assets {
         return null;
     }
 
+    /**
+     * Loads asset metadata from an already captured database world id. This
+     * overload is safe for asynchronous coordination callbacks because it does
+     * not access a Bukkit {@link World} or the world-keyed runtime cache.
+     */
+    public static Asset getAssetData(byte[] worldId, String assetID) {
+        if (worldId == null || worldId.length != 16 || assetID == null || assetID.isBlank()) {
+            return null;
+        }
+        try (Connection connection = DataBase.getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "SELECT asset_type, meta FROM assets WHERE world = ? AND asset_id = ?")) {
+            statement.setBytes(1, worldId);
+            statement.setString(2, assetID);
+            try (ResultSet result = statement.executeQuery()) {
+                if (result.next()) {
+                    return Asset.assetFromMeta(assetID, result.getInt("asset_type"), result.getBytes("meta"));
+                }
+            }
+        } catch (SQLException error) {
+            Profitable.getInstance().getLogger().log(Level.SEVERE,
+                    "Could not load asset metadata for a remote trade notice", error);
+        }
+        return null;
+    }
+
     public static Collection<String> getAssetCodeType(World world, int type) {
         String sql = "SELECT asset_id FROM assets WHERE world = ? AND asset_type = ?;";
 
         Collection<String> assetsFound = new ArrayList<>();
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
+        try (Connection connection = DataBase.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setBytes(1, MessagingUtil.getWorldId(world));
             stmt.setInt(2, type);
 
@@ -179,7 +246,8 @@ public class Assets {
         String sql = "SELECT * FROM assets WHERE world = ? AND asset_type = ?;";
 
         List<Asset> assetsFound = new ArrayList<>();
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
+        try (Connection connection = DataBase.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setBytes(1, MessagingUtil.getWorldId(world));
             stmt.setInt(2, type);
 
@@ -202,7 +270,8 @@ public class Assets {
         String sql = "SELECT asset_id FROM assets WHERE world = ?;";
 
         Collection<String> assetsFound = new ArrayList<>();
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
+        try (Connection connection = DataBase.getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setBytes(1, MessagingUtil.getWorldId(world));
 
             try (ResultSet rs = stmt.executeQuery()) {
@@ -219,22 +288,88 @@ public class Assets {
     }
 
     public static boolean deleteAsset(World world, String asset) {
-        String sql = "DELETE FROM assets WHERE world = ? AND asset_id = ?;";
-
-        try (PreparedStatement stmt = DataBase.getConnection().prepareStatement(sql)) {
-            stmt.setBytes(1, MessagingUtil.getWorldId(world));
-            stmt.setString(2, asset);
-            int affected = stmt.executeUpdate();
-            if (affected > 0) {
+        byte[] worldId = MessagingUtil.getWorldId(world);
+        try (Connection connection = DataBase.getConnection()) {
+            boolean originalAutoCommit = connection.getAutoCommit();
+            connection.setAutoCommit(false);
+            try {
+                String lockSql = DataBase.isMySQL()
+                        ? "SELECT asset_id FROM assets WHERE world = ? AND asset_id = ? FOR UPDATE"
+                        : "UPDATE assets SET asset_id = asset_id WHERE world = ? AND asset_id = ?";
+                boolean exists;
+                try (PreparedStatement lock = connection.prepareStatement(lockSql)) {
+                    lock.setBytes(1, worldId);
+                    lock.setString(2, asset);
+                    if (DataBase.isMySQL()) {
+                        try (ResultSet result = lock.executeQuery()) {
+                            exists = result.next();
+                        }
+                    } else {
+                        exists = lock.executeUpdate() == 1;
+                    }
+                }
+                if (!exists || hasUnsettledAssetState(connection, worldId, asset)
+                        || hasPositiveAssetHoldings(connection, worldId, asset)) {
+                    connection.rollback();
+                    return false;
+                }
+                try (PreparedStatement delete = connection.prepareStatement(
+                        "DELETE FROM assets WHERE world = ? AND asset_id = ?")) {
+                    delete.setBytes(1, worldId);
+                    delete.setString(2, asset);
+                    if (delete.executeUpdate() != 1) {
+                        connection.rollback();
+                        return false;
+                    }
+                }
+                connection.commit();
                 AssetDataCache.invalidate(world, asset);
+                return true;
+            } catch (SQLException error) {
+                connection.rollback();
+                throw error;
+            } finally {
+                connection.setAutoCommit(originalAutoCommit);
             }
-            return affected > 0;
-
-        } catch (SQLException e) {
-            Profitable.getInstance().getLogger().log(Level.SEVERE, "SQL error", e);
+        } catch (SQLException error) {
+            Profitable.getInstance().getLogger().log(Level.SEVERE, "Could not safely delete asset", error);
             return false;
         }
+    }
 
+    private static boolean hasUnsettledAssetState(Connection connection, byte[] worldId, String asset)
+            throws SQLException {
+        String sql = "SELECT 1 FROM orders WHERE world = ? AND asset_id = ? LIMIT 1";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setBytes(1, worldId);
+            statement.setString(2, asset);
+            try (ResultSet result = statement.executeQuery()) {
+                if (result.next()) {
+                    return true;
+                }
+            }
+        }
+        sql = "SELECT 1 FROM delivery_outbox WHERE world = ? AND asset_id = ? "
+                + "AND status <> 'COMPLETED' LIMIT 1";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setBytes(1, worldId);
+            statement.setString(2, asset);
+            try (ResultSet result = statement.executeQuery()) {
+                return result.next();
+            }
+        }
+    }
+
+    private static boolean hasPositiveAssetHoldings(Connection connection, byte[] worldId, String asset)
+            throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT 1 FROM account_assets WHERE world = ? AND asset_id = ? AND quantity > 0 LIMIT 1")) {
+            statement.setBytes(1, worldId);
+            statement.setString(2, asset);
+            try (ResultSet result = statement.executeQuery()) {
+                return result.next();
+            }
+        }
     }
 
     public static void generateAssets(World world){

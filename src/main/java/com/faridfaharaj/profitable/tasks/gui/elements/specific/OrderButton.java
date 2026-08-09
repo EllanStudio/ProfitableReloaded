@@ -9,15 +9,19 @@ import com.faridfaharaj.profitable.tasks.gui.elements.GuiElement;
 import com.faridfaharaj.profitable.util.MessagingUtil;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Material;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 public final class OrderButton extends GuiElement{
 
     Order order;
+    private final AtomicBoolean cancelling = new AtomicBoolean();
 
     public OrderButton(ChestGUI gui, Order order, int slot, boolean actionCancel) {
         super(gui, order.isSideBuy()?new ItemStack(Material.PAPER):new ItemStack(Material.MAP), order.isSideBuy()?Profitable.getLang().get("orders.sides.buy").color(Configuration.COLORBULLISH):Profitable.getLang().get("orders.sides.sell").color(Configuration.COLORBEARISH),
@@ -35,10 +39,30 @@ public final class OrderButton extends GuiElement{
 
     }
 
-    public void cancel(Player player){
+    public void cancel(Player player, Consumer<Boolean> completion){
+        if (!player.hasPermission("profitable.account.manage.orders.cancel")) {
+            MessagingUtil.sendGenericMissingPerm(player);
+            completion.accept(false);
+            return;
+        }
+        if (!cancelling.compareAndSet(false, true)) {
+            return;
+        }
+        World world = player.getWorld();
+        String account = com.faridfaharaj.profitable.data.tables.Accounts.getAccount(player);
         Profitable.getfolialib().getScheduler().runAsync(task -> {
-            Orders.cancelOrder(order.getUuid(), player);
+            boolean cancelled = Orders.cancelOrder(order.getUuid(), player, world, account);
+            Profitable.getfolialib().getScheduler().runAtEntity(player, entityTask -> {
+                if (!cancelled) {
+                    cancelling.set(false);
+                }
+                completion.accept(cancelled);
+            });
         });
+    }
+
+    public Order getOrder() {
+        return order;
     }
 
 }

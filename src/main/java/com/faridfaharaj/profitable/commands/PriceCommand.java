@@ -93,7 +93,7 @@ public class PriceCommand implements CommandExecutor {
                         .append(Component.text(MessagingUtil.formatVolume(summary.getVolume()), Configuration.GUICOLORHIGHLIGHT)).appendNewline()
 
                         .append(Component.text("[Trade] ", Configuration.COLORHIGHLIGHT)
-                                .clickEvent(ClickEvent.runCommand("/profitable:assets"))
+                                .clickEvent(ClickEvent.runCommand("/profitablereloaded:assets"))
                                 .hoverEvent(HoverEvent.showText(Component.text("/assets", Configuration.COLORHIGHLIGHT))));
 
                 MessagingUtil.sendComponentMessage(player, component);

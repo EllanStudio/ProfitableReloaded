@@ -4,3 +4,5 @@ Profitable.iml
 dependency-reduced-pom.xml
 target
 *.class
+.codex-skills-cache/
+.qoder/

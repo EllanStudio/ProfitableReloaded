@@ -1,212 +1,267 @@
 package com.faridfaharaj.profitable.data;
 
 import com.faridfaharaj.profitable.Profitable;
-import com.faridfaharaj.profitable.util.MessagingUtil;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
-import org.bukkit.World;
-import org.bukkit.command.CommandSender;
-import org.bukkit.entity.Player;
+import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.MigrationVersion;
 
+import javax.sql.DataSource;
 import java.io.IOException;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.security.CodeSource;
-import java.sql.*;
-import java.util.ArrayList;
-import java.util.List;
+import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.Locale;
 import java.util.logging.Level;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 
-public class DataBase {
+public final class DataBase {
 
-    private static Connection connection;
-    private static HikariDataSource hikariDataSource;
+    private static HikariDataSource dataSource;
+    private static boolean mysql;
 
-    public static void connectMySQL() throws SQLException{
+    private DataBase() {
+    }
 
-        String  host = Profitable.getInstance().getConfig().getString("database.mysql.host"),
-                port = Profitable.getInstance().getConfig().getString("database.mysql.port"),
-                database = Profitable.getInstance().getConfig().getString("database.mysql.database"),
-                options = Profitable.getInstance().getConfig().getString("database.mysql.options"),
-
-                username = Profitable.getInstance().getConfig().getString("database.mysql.username"),
-                password = Profitable.getInstance().getConfig().getString("database.mysql.password");
-
-        String link = "jdbc:mysql://" + host + ":" + port + "/" + database + options;
+    public static void connectMySQL() throws SQLException {
+        var configFile = Profitable.getInstance().getConfig();
+        String host = required(configFile.getString("database.mysql.host"), "database.mysql.host");
+        String port = required(configFile.getString("database.mysql.port"), "database.mysql.port");
+        String database = required(configFile.getString("database.mysql.database"), "database.mysql.database");
+        String username = required(configFile.getString("database.mysql.username"), "database.mysql.username");
+        String password = configFile.getString("database.mysql.password", "");
+        String options = configFile.getString("database.mysql.options", "?useSSL=true&serverTimezone=UTC");
 
         HikariConfig config = new HikariConfig();
-        config.setJdbcUrl(link);
+        config.setPoolName("ProfitableReloaded-MySQL");
+        config.setDriverClassName("com.mysql.cj.jdbc.Driver");
+        config.setJdbcUrl("jdbc:mysql://" + host + ":" + port + "/" + database + options);
         config.setUsername(username);
         config.setPassword(password);
-        config.setMaximumPoolSize(10);
-        config.setMinimumIdle(2);
-        config.setIdleTimeout(300000); // 5 minutes
-        config.setMaxLifetime(600000); // 10 minutes
-        config.setConnectionTimeout(10000); // 10 seconds
+        config.setMaximumPoolSize(Math.max(2, configFile.getInt("database.pool.maximum-size", 10)));
+        config.setMinimumIdle(Math.max(0, configFile.getInt("database.pool.minimum-idle", 2)));
+        config.setConnectionTimeout(Math.max(1000, configFile.getLong("database.pool.connection-timeout-ms", 10000)));
+        config.setIdleTimeout(300000);
+        config.setMaxLifetime(1800000);
         config.addDataSourceProperty("cachePrepStmts", "true");
         config.addDataSourceProperty("prepStmtCacheSize", "250");
         config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
+        config.addDataSourceProperty("rewriteBatchedStatements", "true");
 
-        hikariDataSource = new HikariDataSource(config);
-        connection = hikariDataSource.getConnection();
-
-        Profitable.getInstance().getLogger().info("HikariCP connection pool initialized (max=10, minIdle=2)");
+        dataSource = new HikariDataSource(config);
+        mysql = true;
+        verifyConnection();
     }
 
     public static void connectSQLite() throws SQLException {
-
         if (Profitable.getInstance().getConfig().getBoolean("redis.enabled", false)) {
-            Profitable.getInstance().getLogger().warning(
-                    "SQLite is not suitable for multi-server (Velocity) setups. " +
-                    "Switch to MySQL (database-type: 1) when using Redis synchronization.");
+            throw new SQLException("Redis multi-server mode requires a shared MySQL database; SQLite is single-server only");
         }
 
-        // TEMPORAL ######
-        try{
-            Files.move(Paths.get(Profitable.getInstance().getDataFolder().getAbsolutePath()+"/data/server_Wide.db"), Paths.get(Profitable.getInstance().getDataFolder().getAbsolutePath() + "/Data.db"), StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException ignored) {
-        }
-        // TEMPORAL ######
-
-        String data = "jdbc:sqlite:" + Profitable.getInstance().getDataFolder().getAbsolutePath() + "/Data.db";
-        connection = DriverManager.getConnection(data);
-        try (Statement stmt = connection.createStatement()) {
-            stmt.execute("PRAGMA foreign_keys = ON;");
-            stmt.execute("PRAGMA journal_mode = WAL;");
-            stmt.execute("PRAGMA threadsafety=1;");
-        }catch (Exception e){
-            Profitable.getInstance().getLogger().log(Level.SEVERE, "Database error", e);
-        }
-
-
-    }
-
-    public static void closeConnection() throws SQLException {
-        if (connection != null && !connection.isClosed()) {
-            connection.close();
-        }
-        if (hikariDataSource != null && !hikariDataSource.isClosed()) {
-            hikariDataSource.close();
-        }
-    }
-
-    // Get the current database connection
-    public static Connection getConnection() {
+        Path dataFolder = Profitable.getInstance().getDataFolder().toPath();
+        Path legacy = dataFolder.resolve("data").resolve("server_Wide.db");
+        Path database = dataFolder.resolve("Data.db");
         try {
-            if (connection == null || connection.isClosed()) {
-                if (hikariDataSource != null) {
-                    connection = hikariDataSource.getConnection();
-                }
+            Files.createDirectories(dataFolder);
+            if (Files.exists(legacy) && Files.notExists(database)) {
+                Files.move(legacy, database, StandardCopyOption.REPLACE_EXISTING);
             }
-        } catch (SQLException e) {
-            Profitable.getInstance().getLogger().log(Level.SEVERE, "Database error", e);
+        } catch (IOException e) {
+            throw new SQLException("Could not prepare SQLite database file", e);
         }
-        return connection;
+
+        HikariConfig config = new HikariConfig();
+        config.setPoolName("ProfitableReloaded-SQLite");
+        config.setDriverClassName("org.sqlite.JDBC");
+        config.setJdbcUrl("jdbc:sqlite:" + database.toAbsolutePath());
+        config.setMaximumPoolSize(1);
+        config.setMinimumIdle(1);
+        config.setConnectionTimeout(10000);
+        config.setConnectionInitSql("PRAGMA foreign_keys = ON");
+        dataSource = new HikariDataSource(config);
+        mysql = false;
+
+        try (Connection connection = getConnection(); Statement statement = connection.createStatement()) {
+            statement.execute("PRAGMA journal_mode = WAL");
+            statement.execute("PRAGMA busy_timeout = 10000");
+        }
     }
 
-    // Get the current world id
-    /*public static byte[] getCurrentWorld() {
-        return currentWorldid;
+    public static Connection getConnection() throws SQLException {
+        if (dataSource == null || dataSource.isClosed()) {
+            throw new SQLException("Database pool is not initialized");
+        }
+        return dataSource.getConnection();
     }
 
-     */
-
-    public static void migrateDatabase(Connection connection) throws IOException {
-        Profitable.getInstance().getLogger().info("Migrating database...");
-
-        int currentVersion = 0;
-        try (Statement stmt = connection.createStatement()) {
-            stmt.execute("CREATE TABLE IF NOT EXISTS profitable_database_version(version INT NOT NULL PRIMARY KEY);");
-        }catch (SQLException e){
-            Profitable.getInstance().getLogger().log(Level.SEVERE, "Database error", e);
+    public static DataSource getDataSource() {
+        if (dataSource == null || dataSource.isClosed()) {
+            throw new IllegalStateException("Database pool is not initialized");
         }
+        return dataSource;
+    }
 
-        try (Statement stmt = connection.createStatement();
-             ResultSet rs = stmt.executeQuery("SELECT version FROM profitable_database_version")) {
-            currentVersion = rs.next() ? rs.getInt("version") : 0;
-        }catch (SQLException e){
-            Profitable.getInstance().getLogger().log(Level.SEVERE, "Database error", e);
-        }
+    public static boolean isMySQL() {
+        return mysql;
+    }
 
-        List<String> migrationFiles = getMigrationFiles().stream()
-                .sorted().toList();
-
-        if(migrationFiles.size() == currentVersion){
-            Profitable.getInstance().getLogger().info("No migration needed!");
+    public static void migrateDatabase() {
+        if (!mysql) {
+            migrateSQLite();
             return;
         }
+        int legacyVersion = readLegacyVersion();
+        var configuration = Flyway.configure(Profitable.getInstance().getClass().getClassLoader())
+                .dataSource(dataSource)
+                .locations("classpath:db/migration/" + (mysql ? "mysql" : "sqlite"))
+                .baselineOnMigrate(true)
+                .baselineVersion(MigrationVersion.fromVersion(String.valueOf(Math.max(1, legacyVersion))))
+                .validateMigrationNaming(true)
+                .cleanDisabled(true);
 
-        // vvvv ##################################### TEMPORAL ##################################### vvvv
-        boolean isOld = false;
-        try (ResultSet tables = connection.getMetaData().getTables(null, null, "assets", new String[]{"TABLE"})) {
-            isOld = tables.next();
-        } catch (SQLException ignored) {}
-
-        if (isOld) {
-            String temporalSql = new String(Profitable.getInstance().getResource("db/migration/temporal_migration.tmp").readAllBytes());
-            String[] sqls = temporalSql.split(";");
-
-            try (Statement stmt = connection.createStatement()) {
-                for (String sql : sqls) {
-                    if (!sql.isBlank()) stmt.execute(sql.trim());
-                }
-
-                stmt.execute("INSERT INTO profitable_database_version (version) VALUES (1)");
-            }catch (SQLException e){
-                Profitable.getInstance().getLogger().log(Level.SEVERE, "Database error", e);
-            }
-
-            Profitable.getInstance().getLogger().info("Partially Migrated Pre-0.2.0 database");
-            Profitable.getInstance().getLogger().warning("ORDERS and PER-WORLD DATA weren't migrated!");
-            return;
-        }
-        // ^^^^ ##################################### TEMPORAL ##################################### ^^^^
-
-        for (int i = currentVersion; i < migrationFiles.size(); i++) {
-            String file = migrationFiles.get(i);
-            String fileContent = new String(Profitable.getInstance().getResource(file).readAllBytes());
-            String[] sqls = fileContent.split(";");
-
-            try (Statement stmt = connection.createStatement()) {
-                for (String sql : sqls) {
-                    if (!sql.isBlank()) stmt.execute(sql.trim());
-                }
-
-                String version = file.substring(file.indexOf("V") + 1, file.indexOf("__"));
-                stmt.execute("INSERT INTO profitable_database_version (version) VALUES (" + version + ")");
-            }catch (SQLException ignored){
-
-            }
-        }
-
-        Profitable.getInstance().getLogger().info("Migrated database successfully!");
-
+        int migrations = configuration.load().migrate().migrationsExecuted;
+        Profitable.getInstance().getLogger().info("Flyway database migration complete (" + migrations + " applied)");
     }
 
-    public static List<String> getMigrationFiles(){
-        List<String> files = new ArrayList<>();
+    private static void migrateSQLite() {
+        String[] migrations = {"V1__tables.sql", "V2__indexes.sql", "V3__coordination.sql",
+                "V4__order_fifo_and_constraints.sql", "V5__durable_settlement_and_sequence.sql",
+                "V6__audited_market_adjustments.sql", "V7__market_time_and_wallet_adjustments.sql"};
+        try (Connection connection = getConnection()) {
+            try (Statement statement = connection.createStatement()) {
+                statement.execute("CREATE TABLE IF NOT EXISTS profitable_schema_history ("
+                        + "version INT NOT NULL PRIMARY KEY, description VARCHAR(100) NOT NULL, installed_on BIGINT NOT NULL)");
+            }
+
+            int currentVersion = readSQLiteVersion(connection);
+            if (currentVersion == 0 && tableExists(connection, "assets")) {
+                if (!columnExists(connection, "assets", "world")) {
+                    throw new IllegalStateException("Pre-0.2 SQLite schema detected. Back up Data.db and migrate it before starting this version.");
+                }
+                currentVersion = Math.max(1, readLegacyVersion(connection));
+                baselineSQLite(connection, currentVersion);
+            }
+
+            for (int version = currentVersion + 1; version <= migrations.length; version++) {
+                applySQLiteMigration(connection, version, migrations[version - 1]);
+            }
+            Profitable.getInstance().getLogger().info("SQLite schema migration complete (version " + migrations.length + ")");
+        } catch (SQLException | IOException e) {
+            throw new IllegalStateException("Could not migrate SQLite database", e);
+        }
+    }
+
+    private static void applySQLiteMigration(Connection connection, int version, String file) throws SQLException, IOException {
+        var rawResource = Profitable.getInstance().getResource("db/migration/sqlite/" + file);
+        if (rawResource == null) {
+            throw new IOException("Missing SQLite migration resource " + file);
+        }
+        String sql;
+        try (var resource = rawResource) {
+            sql = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        connection.setAutoCommit(false);
         try {
-            CodeSource src = Profitable.getInstance().getClass().getProtectionDomain().getCodeSource();
-            if (src != null) {
-                URL jar = src.getLocation();
-                try (ZipInputStream zip = new ZipInputStream(jar.openStream())) {
-                    ZipEntry entry;
-                    while ((entry = zip.getNextEntry()) != null) {
-                        String name = entry.getName();
-                        if (name.startsWith("db/migration") && name.endsWith(".sql") && !entry.isDirectory()) {
-                            files.add(name);
-                        }
+            try (Statement statement = connection.createStatement()) {
+                for (String command : sql.split(";")) {
+                    if (!command.isBlank()) {
+                        statement.execute(command.trim());
                     }
                 }
             }
-        } catch (IOException e) {
-            Profitable.getInstance().getLogger().log(Level.SEVERE, "Database error", e);
+            try (var statement = connection.prepareStatement(
+                    "INSERT INTO profitable_schema_history(version, description, installed_on) VALUES (?, ?, ?)")) {
+                statement.setInt(1, version);
+                statement.setString(2, file);
+                statement.setLong(3, System.currentTimeMillis());
+                statement.executeUpdate();
+            }
+            connection.commit();
+        } catch (SQLException e) {
+            connection.rollback();
+            throw e;
         }
-        return files;
+    }
+
+    private static int readSQLiteVersion(Connection connection) throws SQLException {
+        try (Statement statement = connection.createStatement();
+             ResultSet result = statement.executeQuery("SELECT COALESCE(MAX(version), 0) FROM profitable_schema_history")) {
+            return result.next() ? result.getInt(1) : 0;
+        }
+    }
+
+    private static void baselineSQLite(Connection connection, int version) throws SQLException {
+        try (var statement = connection.prepareStatement(
+                "INSERT OR IGNORE INTO profitable_schema_history(version, description, installed_on) VALUES (?, ?, ?)")) {
+            for (int current = 1; current <= version; current++) {
+                statement.setInt(1, current);
+                statement.setString(2, "Legacy baseline");
+                statement.setLong(3, System.currentTimeMillis());
+                statement.addBatch();
+            }
+            statement.executeBatch();
+        }
+    }
+
+    private static boolean tableExists(Connection connection, String table) throws SQLException {
+        try (ResultSet result = connection.getMetaData().getTables(null, null, table, new String[]{"TABLE"})) {
+            return result.next();
+        }
+    }
+
+    private static boolean columnExists(Connection connection, String table, String column) throws SQLException {
+        try (ResultSet result = connection.getMetaData().getColumns(null, null, table, column)) {
+            return result.next();
+        }
+    }
+
+    public static void closeConnection() {
+        if (dataSource != null && !dataSource.isClosed()) {
+            dataSource.close();
+        }
+        dataSource = null;
+    }
+
+    private static int readLegacyVersion() {
+        try (Connection connection = getConnection()) {
+            return readLegacyVersion(connection);
+        } catch (SQLException e) {
+            Profitable.getInstance().getLogger().log(Level.WARNING, "Could not read legacy migration version; Flyway will inspect the schema", e);
+            return 0;
+        }
+    }
+
+    private static int readLegacyVersion(Connection connection) throws SQLException {
+        DatabaseMetaData metadata = connection.getMetaData();
+        try (ResultSet tables = metadata.getTables(connection.getCatalog(), null,
+                "profitable_database_version", new String[]{"TABLE"})) {
+            if (!tables.next()) {
+                return 0;
+            }
+        }
+        try (Statement statement = connection.createStatement();
+             ResultSet result = statement.executeQuery("SELECT MAX(version) FROM profitable_database_version")) {
+            return result.next() ? result.getInt(1) : 0;
+        }
+    }
+
+    private static void verifyConnection() throws SQLException {
+        try (Connection connection = getConnection()) {
+            if (!connection.isValid(5)) {
+                throw new SQLException("Database connection validation failed");
+            }
+        }
+    }
+
+    private static String required(String value, String path) throws SQLException {
+        if (value == null || value.isBlank()) {
+            throw new SQLException("Missing required configuration: " + path);
+        }
+        return value.trim();
     }
 }

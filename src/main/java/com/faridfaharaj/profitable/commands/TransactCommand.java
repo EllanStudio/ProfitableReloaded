@@ -51,6 +51,10 @@ public class TransactCommand implements CommandExecutor {
 
                     try{
                         price = Double.parseDouble(args[2]);
+                        if(!Double.isFinite(price) || price <= 0){
+                            MessagingUtil.sendGenericInvalidAmount(sender, args[2]);
+                            return;
+                        }
                     }catch (Exception e){
                         MessagingUtil.sendGenericInvalidAmount(sender, args[2]);
                         return;
@@ -88,6 +92,10 @@ public class TransactCommand implements CommandExecutor {
                 }else{
                     try{
                         units = Double.parseDouble(args[1]);
+                        if(!Double.isFinite(units) || units <= 0){
+                            MessagingUtil.sendGenericInvalidAmount(sender, args[1]);
+                            return;
+                        }
                     }catch (Exception e){
                         MessagingUtil.sendGenericInvalidAmount(sender, args[1]);
                         return;

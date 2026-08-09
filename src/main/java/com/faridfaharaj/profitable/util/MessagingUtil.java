@@ -16,12 +16,15 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
 public class MessagingUtil {
 
-    static DecimalFormat decimalFormat = new DecimalFormat("0.0####");
+    private static final ThreadLocal<DecimalFormat> DECIMAL_FORMAT = ThreadLocal.withInitial(
+            () -> new DecimalFormat("0.0####", DecimalFormatSymbols.getInstance(Locale.ROOT)));
 
     public static Component buttonComponent(String text, String command){
 
@@ -31,8 +34,12 @@ public class MessagingUtil {
 
     }
 
+    public static String escapeMiniMessage(String value) {
+        return MiniMessage.miniMessage().escapeTags(value == null ? "" : value);
+    }
+
     public static String assetAmmount(Asset asset, double amount){
-        return "<color:" + asset.getColor().asHexString() + ">" + decimalFormat.format(amount) + " " + asset.getCode() + "</color>";
+        return "<color:" + asset.getColor().asHexString() + ">" + DECIMAL_FORMAT.get().format(amount) + " " + asset.getCode() + "</color>";
     }
 
     public static Component assetSummary(Asset asset){
@@ -73,7 +80,7 @@ public class MessagingUtil {
         String feeString;
         if(fee != 0){
             feeString = Profitable.getLang().getString("exchange.fee-display",
-                    Map.entry("%amount%", decimalFormat.format(fee)),
+                    Map.entry("%amount%", DECIMAL_FORMAT.get().format(fee)),
                     Map.entry("%asset%", assetCharged.getCode())
             );
         }else {
@@ -92,7 +99,7 @@ public class MessagingUtil {
         String feeString;
         if(fee != 0){
             feeString = Profitable.getLang().getString("exchange.fee-display",
-                    Map.entry("%amount%", decimalFormat.format(fee)),
+                    Map.entry("%amount%", DECIMAL_FORMAT.get().format(fee)),
                     Map.entry("%asset%", assetCharged.getCode())
             );
         }else {
@@ -100,7 +107,7 @@ public class MessagingUtil {
         }
 
         MessagingUtil.sendComponentMessage(sender, Profitable.getLang().get("exchange.payment-notice",
-                Map.entry("%asset_amount%", MessagingUtil.assetAmmount(assetCharged, amount+fee)),
+                Map.entry("%asset_amount%", MessagingUtil.assetAmmount(assetCharged, amount-fee)),
                 Map.entry("%fee%", feeString)
         ));
     }
@@ -178,7 +185,7 @@ public class MessagingUtil {
     }
 
     public static String formatNumber(double number){
-        return decimalFormat.format(number);
+        return DECIMAL_FORMAT.get().format(number);
     }
 
 }

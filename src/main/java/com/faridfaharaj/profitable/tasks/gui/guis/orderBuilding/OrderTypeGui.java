@@ -31,10 +31,16 @@ public final class OrderTypeGui extends ChestGUI {
 
     AssetCache[][] assetCache;
     AssetCache assetData;
+    boolean fromTrade;
     public OrderTypeGui(AssetCache[][] assetCache, AssetCache assetData, Order order, List<Order> bidOrders, List<Order> askOrders) {
+        this(assetCache, assetData, order, bidOrders, askOrders, false);
+    }
+
+    public OrderTypeGui(AssetCache[][] assetCache, AssetCache assetData, Order order, List<Order> bidOrders, List<Order> askOrders, boolean fromTrade) {
         super(3, Profitable.getLang().get("gui.order-building.type-select.title"));
         this.assetCache = assetCache;
         this.assetData = assetData;
+        this.fromTrade = fromTrade;
 
         this.order = order;
         this.bidOrders = bidOrders;
@@ -76,24 +82,24 @@ public final class OrderTypeGui extends ChestGUI {
 
                 if(button == buttons[0]){
                     player.closeInventory();
-                    new BuySellGui(assetCache, assetData, bidOrders, askOrders).openGui(player);
+                    new BuySellGui(assetCache, assetData, bidOrders, askOrders, fromTrade).openGui(player);
                 }
 
                 if(button == buttons[1]){
                     if(allowMarket){
                         player.closeInventory();
-                        new UnitsSelect(assetCache, assetData, new Order(order.getUuid(), order.getOwner(), order.getAsset(), order.isSideBuy(), order.isSideBuy()?Double.MAX_VALUE:Double.MIN_VALUE, order.getUnits(), Order.OrderType.MARKET), bidOrders, askOrders).openGui(player);
+                        new UnitsSelect(assetCache, assetData, new Order(order.getUuid(), order.getOwner(), order.getAsset(), order.isSideBuy(), order.isSideBuy()?Double.MAX_VALUE:Double.MIN_VALUE, order.getUnits(), Order.OrderType.MARKET), bidOrders, askOrders, fromTrade).openGui(player);
                     }
                 }
 
                 if(button == buttons[2]){
                     player.closeInventory();
-                    new PriceSelect(assetCache, assetData, new Order(order.getUuid(), order.getOwner(), order.getAsset(), order.isSideBuy(), order.getPrice(), order.getUnits(), Order.OrderType.LIMIT), bidOrders, askOrders).openGui(player);
+                    new PriceSelect(assetCache, assetData, new Order(order.getUuid(), order.getOwner(), order.getAsset(), order.isSideBuy(), order.getPrice(), order.getUnits(), Order.OrderType.LIMIT), bidOrders, askOrders, fromTrade).openGui(player);
                 }
 
                 if(button == buttons[3]){
                     player.closeInventory();
-                    new PriceSelect(assetCache, assetData, new Order(order.getUuid(), order.getOwner(), order.getAsset(), order.isSideBuy(), order.getPrice(), order.getUnits(), Order.OrderType.STOP_LIMIT), bidOrders, askOrders).openGui(player);
+                    new PriceSelect(assetCache, assetData, new Order(order.getUuid(), order.getOwner(), order.getAsset(), order.isSideBuy(), order.getPrice(), order.getUnits(), Order.OrderType.STOP_LIMIT), bidOrders, askOrders, fromTrade).openGui(player);
                 }
 
             }

@@ -14,14 +14,13 @@ public class VaultHook {
     private static boolean isConnected;
 
     public static boolean inithook(Profitable profitable){
+        economy = null;
+        ASSET = null;
+        isConnected = false;
         if(profitable.getConfig().getBoolean("vault-support")){
 
             economy = VaultHook.findEconomy(profitable);
             isConnected = economy != null;
-
-        }else{
-
-            isConnected = false;
 
         }
 

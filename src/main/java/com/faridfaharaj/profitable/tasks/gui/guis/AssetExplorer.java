@@ -3,11 +3,11 @@ package com.faridfaharaj.profitable.tasks.gui.guis;
 import com.faridfaharaj.profitable.Configuration;
 import com.faridfaharaj.profitable.Profitable;
 import com.faridfaharaj.profitable.data.tables.Candles;
-import com.faridfaharaj.profitable.tasks.TemporalItems;
 import com.faridfaharaj.profitable.tasks.gui.ChestGUI;
 import com.faridfaharaj.profitable.tasks.gui.elements.GuiElement;
 import com.faridfaharaj.profitable.tasks.gui.elements.specific.AssetButton;
 import com.faridfaharaj.profitable.tasks.gui.elements.specific.AssetCache;
+import com.faridfaharaj.profitable.util.MessagingUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
@@ -27,7 +27,6 @@ public final class AssetExplorer extends ChestGUI {
 
     GuiElement walletButton;
     GuiElement ordersButton;
-    GuiElement deliveryButton;
 
     AssetCache[][] assetCache = new AssetCache[5][];
     int assetType;
@@ -59,7 +58,7 @@ public final class AssetExplorer extends ChestGUI {
                 ), vectorSlotPosition(6, 5));
 
         pageButton = new GuiElement(this, new ItemStack(Material.PAPER), Profitable.getLang().get("gui.generic.buttons.page-selector.name",
-                Map.entry("%page%",String.valueOf(page)),
+                Map.entry("%page%",String.valueOf(page + 1)),
                 Map.entry("%pages%",String.valueOf(pages))
         ), Profitable.getLang().langToLore("gui.generic.buttons.page-selector.lore"), vectorSlotPosition(7,5));
 
@@ -71,42 +70,37 @@ public final class AssetExplorer extends ChestGUI {
                 Profitable.getLang().langToLore("gui.asset-explorer.buttons.orders.lore")
                 , vectorSlotPosition(1, 5));
 
-        deliveryButton = new GuiElement(this, new ItemStack(Material.CARROT_ON_A_STICK), Profitable.getLang().get("gui.asset-explorer.buttons.delivery.name"),
-                Profitable.getLang().langToLore("gui.asset-explorer.buttons.delivery.lore")
-                , vectorSlotPosition(3, 5));
-
         long time = player.getWorld().getFullTime();
-        updateAssets(player.getWorld(), assetType, previousCache, time);
+        updateAssets(player, player.getWorld(), assetType, previousCache, time);
 
 
     }
 
-    private void updateAssets(World world, int assetType, AssetCache[][] previousCache, long time) {
+    private void updateAssets(Player player, World world, int assetType, AssetCache[][] previousCache, long time) {
         Profitable.getfolialib().getScheduler().runAsync(task -> {
-            page = 0;
-            if(previousCache == null){
-                assetCache[assetType] = Candles.getAssetsNPrice(world, assetType, time).toArray(new AssetCache[0]);
-            }else {
-                assetCache = previousCache;
-                if(previousCache[assetType] == null){
-                    assetCache[assetType] = Candles.getAssetsNPrice(world, assetType, time).toArray(new AssetCache[0]);
+            AssetCache[][] loadedCache = previousCache == null ? new AssetCache[5][] : previousCache;
+            if(loadedCache[assetType] == null){
+                loadedCache[assetType] = Candles.getAssetsNPrice(world, assetType, time).toArray(new AssetCache[0]);
+            }
+
+            render(player, () -> {
+                if (this.assetType != assetType) return;
+                page = 0;
+                assetCache = loadedCache;
+                pages = (int) Math.ceil((double) assetCache[assetType].length / 21);
+
+                updatePage();
+
+                if(pages > 0){
+                    pageButton.setDisplayName(Profitable.getLang().get("gui.generic.buttons.page-selector.name",
+                            Map.entry("%page%",String.valueOf(page + 1)),
+                            Map.entry("%pages%",String.valueOf(pages))
+                    ));
+                    pageButton.show(this);
+                }else {
+                    fillSlot(pageButton.getSlot(), new ItemStack(Material.BLACK_STAINED_GLASS_PANE));
                 }
-            }
-
-            pages = (int) Math.ceil((double) assetCache[assetType].length / 21);
-
-            updatePage();
-
-            if(pages > 0){
-                pageButton.setDisplayName(Profitable.getLang().get("gui.generic.buttons.page-selector.name",
-                        Map.entry("%page%",String.valueOf(page)),
-                        Map.entry("%pages%",String.valueOf(pages))
-                ));
-                pageButton.show(this);
-            }else {
-                fillSlot(pageButton.getSlot(), new ItemStack(Material.BLACK_STAINED_GLASS_PANE));
-            }
-
+            });
         });
     }
 
@@ -140,24 +134,21 @@ public final class AssetExplorer extends ChestGUI {
         }
 
         if(walletButton.getSlot() == slot){
+            if (!player.hasPermission("profitable.account.info.wallet")) {
+                MessagingUtil.sendGenericMissingPerm(player);
+                return;
+            }
             player.closeInventory();
             new HoldingsMenu(player, assetCache).openGui(player);
         }
 
         if(ordersButton.getSlot() == slot){
+            if (!player.hasPermission("profitable.account.info.orders")) {
+                MessagingUtil.sendGenericMissingPerm(player);
+                return;
+            }
             player.closeInventory();
             new UserOrdersGui(player, assetCache).openGui(player);
-        }
-
-        if(deliveryButton.getSlot() == slot){
-            if(click.isLeftClick()){
-                player.closeInventory();
-                TemporalItems.sendDeliveryStick(player, true);
-            }
-            if(click.isRightClick()){
-                player.closeInventory();
-                TemporalItems.sendDeliveryStick(player, false);
-            }
         }
 
         if(categoryButton.getSlot() == slot){
@@ -173,7 +164,7 @@ public final class AssetExplorer extends ChestGUI {
                             Map.entry("%category_list%", types)
             ));
             categoryButton.show(this);
-            updateAssets(player.getWorld(), assetType, assetCache, player.getWorld().getFullTime());
+            updateAssets(player, player.getWorld(), assetType, assetCache, player.getWorld().getFullTime());
         }
 
         if(pages > 0){
@@ -186,7 +177,7 @@ public final class AssetExplorer extends ChestGUI {
                 page = Math.clamp(page, 0, Math.max(0, pages - 1));
                 updatePage();
                 pageButton.setDisplayName(Profitable.getLang().get("gui.generic.buttons.page-selector.name",
-                        Map.entry("%page%",String.valueOf(page)),
+                        Map.entry("%page%",String.valueOf(page + 1)),
                         Map.entry("%pages%",String.valueOf(pages))
                 ));
                 pageButton.show(this);

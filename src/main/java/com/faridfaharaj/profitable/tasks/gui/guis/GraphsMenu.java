@@ -31,14 +31,22 @@ public final class GraphsMenu extends ChestGUI {
     final GuiElement graph2YButton;
 
     AssetCache[][] cache;
+    final boolean fromTrade;
+    final int returnAssetType;
 
     public GraphsMenu(String assetID, AssetCache[][] cache) {
+        this(assetID, cache, false, 2);
+    }
+
+    public GraphsMenu(String assetID, AssetCache[][] cache, boolean fromTrade, int returnAssetType) {
         super(3, Profitable.getLang().get("gui.graphs.title",
                 Map.entry("%asset%", assetID)
         ));
 
         this.assetid = assetID;
         this.cache = cache;
+        this.fromTrade = fromTrade;
+        this.returnAssetType = returnAssetType;
 
         List<Component> buttonInstructions = new ArrayList<>();
         buttonInstructions.add(Component.text(assetID, Configuration.GUICOLORSUBTITLE));
@@ -63,7 +71,11 @@ public final class GraphsMenu extends ChestGUI {
 
         if(slot == returnButton.getSlot()){
             player.closeInventory();
-            new AssetExplorer(player, 2, cache).openGui(player);
+            if (fromTrade) {
+                new TradeGui(player, returnAssetType, cache).openGui(player);
+            } else {
+                new AssetExplorer(player, returnAssetType, cache).openGui(player);
+            }
         }else if(slot == graph1MButton.getSlot()){
             loadAndSendGraph(player, 720000, "1M");
         } else if (slot == graph3MButton.getSlot()) {
@@ -84,8 +96,6 @@ public final class GraphsMenu extends ChestGUI {
     private void loadAndSendGraph(Player player, long ticks, String label) {
         player.closeInventory();
         MessagingUtil.sendComponentMessage(player, Profitable.getLang().get("assets.loading-graph"));
-        Profitable.getfolialib().getScheduler().runAsync(task -> {
-            TemporalItems.sendGraphMap(player, assetid, ticks, label);
-        });
+        TemporalItems.sendGraphMap(player, assetid, ticks, label);
     }
 }

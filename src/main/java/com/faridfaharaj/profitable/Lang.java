@@ -16,7 +16,7 @@ public class Lang {
 
     private final JavaPlugin plugin;
     private FileConfiguration lang;
-    private final String[] langCodes = {"en","es"};
+    private final String[] langCodes = {"en","zh_cn","zh_TW","es"};
 
     TagResolver resolver = TagResolver.resolver(
 
@@ -67,6 +67,10 @@ public class Lang {
         if (needsSave){
             lang.save(langFile);
         }
+    }
+
+    public void reload(String langCode) throws IOException {
+        loadLang(langCode);
     }
 
     public Component get(String path, Map.Entry<String, String>... placeHolders) {
