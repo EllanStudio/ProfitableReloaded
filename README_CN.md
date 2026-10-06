@@ -1,7 +1,7 @@
 # ProfitableReloaded
 
 [![Build](https://github.com/EllanServer/ProfitableReloaded/actions/workflows/build.yml/badge.svg)](https://github.com/EllanServer/ProfitableReloaded/actions/workflows/build.yml)
-[![Paper](https://img.shields.io/badge/Paper-26.2-blue)](https://papermc.io)
+[![Paper](https://img.shields.io/badge/Paper-26.3-blue)](https://papermc.io)
 [![Java](https://img.shields.io/badge/Java-25-orange)](https://adoptium.net)
 [![License](https://img.shields.io/badge/License-GPL--3.0-green.svg)](LICENSE)
 
@@ -52,7 +52,7 @@ ProfitableReloaded 是一款 Minecraft 经济插件，通过一个**交易所**�
 - **Redis**（可选）：协调会话和实例租约、使资产缓存失效并发送通知。Redis 不会重放任何资金变更；余额、订单、成交与 K 线均以共享 MySQL 为准。
 
 ## 运行要求
-- **Paper 26.2** 或更高版本（支持 Folia）
+- **Paper 26.3** 或更高版本（支持 Folia）
 - **Java 25**
 - 可选依赖：Vault、PlayerPoints、Redis（多服务器场景）
 - **SQLite** 仅用于单后端。多后端部署必须使用共享的 **MySQL 8.0+ 兼容**数据库；当前真实数据库集成测试也已在 **MariaDB 11.4** 上执行。

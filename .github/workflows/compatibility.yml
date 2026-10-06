@@ -1,0 +1,31 @@
+name: Compatibility matrix
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Paper 26.2 baseline
+            paper-api: 26.2.build.111-stable
+          - name: Paper 26.3
+            paper-api: 26.3.build.157-beta
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Build and test
+        run: mvn --batch-mode --no-transfer-progress clean verify -Dpaper.api.version=${{ matrix.paper-api }}
