@@ -3,7 +3,7 @@ version: ${project.version}
 main: com.faridfaharaj.profitable.Profitable
 author: faridfaharaj
 prefix: "ProfitableReloaded"
-api-version: '26.2'
+api-version: '26.3'
 description: "Real supply and demand in minecraft!"
 website: "https://github.com/EllanServer/ProfitableReloaded"
 softdepend:

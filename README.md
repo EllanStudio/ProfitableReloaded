@@ -1,7 +1,7 @@
 # ProfitableReloaded
 
 [![Build](https://github.com/EllanServer/ProfitableReloaded/actions/workflows/build.yml/badge.svg)](https://github.com/EllanServer/ProfitableReloaded/actions/workflows/build.yml)
-[![Paper](https://img.shields.io/badge/Paper-26.2-blue)](https://papermc.io)
+[![Paper](https://img.shields.io/badge/Paper-26.3-blue)](https://papermc.io)
 [![Java](https://img.shields.io/badge/Java-25-orange)](https://adoptium.net)
 [![License](https://img.shields.io/badge/License-GPL--3.0-green.svg)](LICENSE)
 
@@ -52,7 +52,7 @@ Prices are **placed by the players** by using orders, which transact whenever tw
 - **Redis** (optional): session coordination, instance leases, asset-cache invalidation and notifications. Redis never replays financial changes; shared MySQL is authoritative for balances, orders, executions and candles.
 
 ## Requirements
-- **Paper 26.2** or newer (Folia supported)
+- **Paper 26.3** or newer (Folia supported)
 - **Java 25**
 - Optional: Vault, PlayerPoints, Redis (for multi-server)
 - **SQLite** is intended for a single backend. Multi-backend deployments require a shared **MySQL 8.0+ compatible** database; the live integration suite has also been exercised against **MariaDB 11.4**.
